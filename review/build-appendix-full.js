@@ -79,9 +79,9 @@ push(Note('注：泰尔指数采用份额熵形式 T=Σ(GDP_i/GDP)×ln[(GDP_i/GD
 
 // A5—A8
 push(Cap('附表A5　13项指标标准化前取值（2016—2025年）'));
+const PREC={S1:0,S2:4,S3:0,S4:2,D1:4,D2:2,D3:3,D4:3,D5:2,E1:2,E2:2,E3:2,E4:2};
 push(TBL(['编码','三级指标','方向',...YS.map(String)],
-  A.IND.map(x=>[x.code,x.name,x.dir,...x.raw.map(v=>{const a=Math.abs(v);
-    return a>=1000?v.toFixed(0):(a>=100?v.toFixed(1):(a>=10?v.toFixed(2):v.toFixed(3)));})]),
+  A.IND.map(x=>[x.code,x.name,x.dir,...x.raw.map(v=>v.toFixed(PREC[x.code]))]),
   [600,3400,620,...YS.map(()=>1005)],{numFrom:3}));
 push(Note('注：各项取值口径见正文表1。S1、D2、D3、D4为按附表A2辅助序列换算所得；'
  +'D3分母的地区生产总值采用含第五次全国经济普查修订的最新核算口径；'
