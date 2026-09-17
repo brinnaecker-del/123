@@ -77,44 +77,6 @@ push(Note('注：泰尔指数采用份额熵形式 T=Σ(GDP_i/GDP)×ln[(GDP_i/GD
  +'2024年城关区按户籍口径人均地区生产总值在74个区县中排名第5位，常住口径下排名第14位。'
  +'数据来源：74个区县2016—2024年统计资料及历年国民经济和社会发展统计公报。'));
 
-// A5—A8
-push(Cap('附表A5　13项指标标准化前取值（2016—2025年）'));
-const PREC={S1:0,S2:4,S3:0,S4:2,D1:4,D2:2,D3:3,D4:3,D5:2,E1:2,E2:2,E3:2,E4:2};
-push(TBL(['编码','三级指标','方向',...YS.map(String)],
-  A.IND.map(x=>[x.code,x.name,x.dir,...x.raw.map(v=>v.toFixed(PREC[x.code]))]),
-  [600,3400,620,...YS.map(()=>1005)],{numFrom:3}));
-push(Note('注：各项取值口径见正文表1。S1、D2、D3、D4为按附表A2辅助序列换算所得；'
- +'D3分母的地区生产总值采用含第五次全国经济普查修订的最新核算口径；'
- +'D5取统计公报「规上工业主要产品产量」所载发电量（见正文表1注③）。'));
-
-push(Cap('附表A6　13项指标标准化后取值'));
-push(TBL(['编码','三级指标','下限','上限',...YS.map(String)],
-  A.IND.map(x=>[x.code,x.name,String(x.lo),String(x.hi),...x.std.map(v=>v.toFixed(4))]),
-  [600,3000,700,700,...YS.map(()=>968)],{numFrom:2}));
-push(Note('注：按正文式(1)（正向）或式(2)（逆向）以固定基准标准化，超出[0,1]的部分截断，'
- +'再按式(3) x′=0.98x*+0.01 平移压缩至[0.01,0.99]。子系统指数为各子系统内标准化值的等权平均。'));
-
-push(Cap('附表A7　CRITIC—熵值组合权重与结构性贡献缺口完整结果'));
-const codes=A.IND.map(x=>x.code);
-push(TBL(['编码','三级指标','熵值权重','CRITIC权重','组合权重','结构性贡献缺口（样本期均值）'],
-  A.IND.map(x=>[x.code,x.name,A.WE[x.code].toFixed(4),A.WC[x.code].toFixed(4),
-                A.W[x.code].toFixed(4),(A.GAP[x.code]*100).toFixed(2)+'%']),
-  [600,4200,1700,1700,1700,3000],{numFrom:2}));
-const w4=codes.map(k=>A.W[k]).sort((a,b)=>b-a).slice(0,4).reduce((a,b)=>a+b,0);
-push(Note('注：组合权重由熵值权重与CRITIC权重相乘后归一得出，仅用于结构性贡献缺口诊断与稳健性对照，'
- +`不参与子系统合成（子系统内为等权）。前四项组合权重合计${w4.toFixed(4)}，其余九项合计${(1-w4).toFixed(4)}，`
- +'安全类四项权重均低于1.2%。结构性贡献缺口为各指标组合权重与其偏离度(1−x′)之积占当年13项该乘积之和的比重，'
- +'逐年计算后取样本期均值，合计为100%。前六位与正文表4所列一致。'));
-
-push(Cap('附表A8　三子系统综合指数与MPI协调指数（正文表3的四位小数版）'));
-push(TBL(['年份','安全 US','发展 UD','生态 UE','M 均值','S² 总体方差','MPI协调指数 D'],
-  YS.map((y,i)=>{const us=A.SUBIDX.US[i],ud=A.SUBIDX.UD[i],ue=A.SUBIDX.UE[i];
-    const M=(us+ud+ue)/3, S2=((us-M)**2+(ud-M)**2+(ue-M)**2)/3;
-    return [String(y),us.toFixed(4),ud.toFixed(4),ue.toFixed(4),M.toFixed(4),S2.toFixed(6),(M-S2/M).toFixed(4)];}),
-  [1200,1800,1800,1800,1800,2200,2400],{numFrom:1}));
-push(Note('注：本表为正文表3的四位小数版本，并列出MPI计算的中间量。D = M − S²/M，其中M为三子系统综合指数的算术平均，'
- +'S²为其总体方差。正文表3所载为三位小数的舍入结果。'));
-
 const doc=new Document({creator:'附录',title:'附录',
   styles:{default:{document:{run:{font:F,size:18},paragraph:{spacing:{line:260}}}}},
   sections:[{properties:{page:{size:{orientation:PageOrientation.LANDSCAPE},
