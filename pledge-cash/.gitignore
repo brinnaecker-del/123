@@ -1,0 +1,4 @@
+data_raw/
+data_clean/
+data_fake/
+__pycache__/
