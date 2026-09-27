@@ -108,6 +108,18 @@ def annual_fs(raw, key, fields):
     return out.drop_duplicates(['stkcd', 'year'], keep='last')
 
 
+def st_from_names(raw):
+    """没有 ST 名单文件时，用利润表中当年的证券简称识别 ST、*ST、SST、S*ST 与 PT。"""
+    d = load(raw, 'is')
+    if 'ShortName' not in d:
+        return None
+    dt = pd.to_datetime(d[CFG['is']['date']], errors='coerce')
+    d = d.assign(year=dt.dt.year)
+    name = d['ShortName'].fillna('').str.upper().str.replace(' ', '')
+    d = d[name.str.contains('ST') | name.str.startswith('PT')]
+    return d[['stkcd', 'year']].dropna().drop_duplicates().astype({'year': int})
+
+
 def winsor(s, p=0.01):
     lo, hi = s.quantile([p, 1 - p])
     return s.clip(lo, hi)
@@ -213,8 +225,13 @@ def main(raw, out):
     df = df[df['Lev'] < 1]                                       # 资不抵债
     st = load(raw, 'st', required=False)
     if st is not None:
-        st = st.assign(year=num(st[CFG['st']['year']]).astype(int), _st=1)[['stkcd', 'year', '_st']]
-        df = df.merge(st.drop_duplicates(), on=['stkcd', 'year'], how='left')
+        st = st.assign(year=num(st[CFG['st']['year']]).astype(int))[['stkcd', 'year']]
+    else:
+        st = st_from_names(raw)
+    if st is not None:
+        st = st.drop_duplicates().assign(_st=1)
+        df = df.merge(st, on=['stkcd', 'year'], how='left')
+        print(f'剔除 ST/*ST/PT 公司年度：{int((df["_st"] == 1).sum())} 个')
         df = df[df['_st'] != 1].drop(columns='_st')
     df = df.dropna(subset=['Cash', 'Pledge_Dum'] + [c for c in CONTROLS if c != 'CFVol'])
     print(f'样本筛选：{n0} → {len(df)} 个公司年度，{df.stkcd.nunique()} 家公司')
