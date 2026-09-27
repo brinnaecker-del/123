@@ -43,7 +43,7 @@ CFG = {
     # 年个股回报率文件，用其中的年末总市值（单位：千元）
     'mv': dict(file='TRD_Year', id='Stkcd', year='Trdynt', mv='Ysmvttl', mv_unit=1000),
     # 十大股东文件（股东研究 → 十大股东）：取持股排名为 1 的股东
-    # S0303a 股份质押、冻结或托管标识：1 = 有（据 2004—2025 年分布推断，待 DES 说明确认），2/3 = 无
+    # S0303a 股份质押、冻结或托管标识（据 CSMAR 说明文件）：1 = 有，2 = 无，3 = 未知（2012 年后约半数为未知）
     'hld': dict(file='HLD_Shareholders', id='Stkcd', date='Reptdt', name='S0301a', rank='S0306a',
                 shares='S0302a', flag='S0303a', pct='S0304a', flag_yes='1'),
     # 股东股权质押统计表（公司研究系列 → 股权质押 → 股东股权质押统计表）
