@@ -136,6 +136,10 @@ def main(panel, out):
     fc = base.dropna(subset=['HighFC'])
     r = fit(f'Cash ~ Pledge_c + Pledge_c:HighFC + HighFC + {X} | stkcd + year', fc, 'Pledge_c:HighFC')
     L.append(row('H3：Pledge × 滞后一期高融资约束', r, 'Pledge_c:HighFC'))
+    soe = base.dropna(subset=['SOE'])
+    if soe['SOE'].nunique() == 2:
+        r = fit(f'Cash ~ Pledge + Pledge:SOE + {X} | stkcd + year', soe, 'Pledge:SOE')
+        L.append(row('H4：Pledge × SOE（组间差异检验）', r, 'Pledge:SOE'))
     for lab, v in [('H4：民营企业', 0), ('H4：国有企业', 1)]:
         sub = base[base['SOE'] == v]
         if len(sub) > 500:

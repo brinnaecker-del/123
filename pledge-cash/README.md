@@ -5,8 +5,12 @@
 | `开题报告-修改稿.docx` | 修改后的开题报告，图 1、图 2 已同步重画 |
 | `开题报告-修改说明.md` | 逐条列出改了什么、为什么改，以及还需要你自己核实的地方 |
 | `scripts/build_panel.py` | 第 1 步：把 CSMAR 原始表整理成「公司—年度」面板 |
-| `scripts/preregression.py` | 第 2 步：预回归（Python），输出 `results/预回归结果.md` |
-| `scripts/preregression.do` | 同一套回归的 Stata 版（reghdfe） |
+| `scripts/preregression.py` | 第 2 步：预回归（Python），输出 `results/预回归-自动输出-全样本.md` |
+| `scripts/mechanism.py` | 第 3 步：机制检验（平仓压力、现金边际价值），需要质押明细表与月个股回报率 |
+| `scripts/pledge_from_csmar.py` | 用质押统计表 / 明细表构造第一大股东质押比例（被 build_panel.py 调用） |
+| `scripts/fix_split_xlsx.py` | 修复卖家切分后打不开的大文件 |
+| `results/预回归结果.md` | **结果解读（正式版）** |
+| `scripts/preregression.do` | 基准回归的 Stata 版（reghdfe）；IPO、分期、机制等新增检验目前只有 Python 版 |
 | `scripts/make_fake_data.py` | 生成**模拟**数据，只用来测试代码能否跑通，结果不能用 |
 
 ---
@@ -65,7 +69,8 @@ pip install pandas numpy pyfixest openpyxl
 # 把上面的 7 个文件放进 data_raw/
 cd scripts
 python build_panel.py        # → data_clean/panel.csv
-python preregression.py      # → results/预回归结果.md
+python preregression.py      # → results/预回归-自动输出-全样本.md
+python mechanism.py          # → results/机制检验.md（需 PLED_TRDDETL、TRD_Mnth）
 ```
 
 用 Stata 的话，先跑 `build_panel.py` 生成 panel.csv，再在 `scripts/` 目录下 `do preregression.do`。
