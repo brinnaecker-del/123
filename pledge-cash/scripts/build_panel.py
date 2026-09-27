@@ -27,7 +27,9 @@ CFG = {
                ca='A001100000',     # 流动资产合计
                ta='A001000000',     # 资产总计
                cl='A002100000',     # 流动负债合计
-               tl='A002000000'),    # 负债合计
+               tl='A002000000',     # 负债合计
+               orec='A001121000',   # 其他应收款净额（资金占用，H2b）
+               opay='A002120000'),  # 其他应付款（资金占用，H2b）
     # 利润表
     'is': dict(file='FS_Comins', id='Stkcd', date='Accper', type='Typrep',
                rev='B001100000',    # 营业总收入
@@ -110,7 +112,7 @@ def winsor(s, p=0.01):
 
 
 def main(raw, out):
-    bs = annual_fs(raw, 'bs', ['cash', 'ca', 'ta', 'cl', 'tl'])
+    bs = annual_fs(raw, 'bs', ['cash', 'ca', 'ta', 'cl', 'tl', 'orec', 'opay'])
     inc = annual_fs(raw, 'is', ['rev', 'ni'])
     cfs = annual_fs(raw, 'cf', ['ocf', 'capex'])
     df = bs.merge(inc, on=['stkcd', 'year'], how='left').merge(cfs, on=['stkcd', 'year'], how='left')
@@ -182,6 +184,9 @@ def main(raw, out):
     df['CFVol'] = g['CF'].transform(lambda s: s.rolling(3, min_periods=3).std())
     df['NWC'] = (df['ca'] - df['cl'] - df['cash']) / df['ta']
     df['Capex'] = df['capex'] / df['ta']
+    df['OREC_raw'] = ((df['orec'].fillna(0) - df['opay'].fillna(0)) / df['ta']  # 资金净占用，缩尾后再做行业年度调整
+                      ).where(df['orec'].notna() | df['opay'].notna())
+    df['OR_raw'] = df['orec'] / df['ta']
     age_raw = (df['year'] - df['listyear']).clip(lower=0)
     df['Age'] = np.log(age_raw + 1)
 
@@ -206,14 +211,17 @@ def main(raw, out):
     df = df.dropna(subset=['Cash', 'Pledge_Dum'] + [c for c in CONTROLS if c != 'CFVol'])
     print(f'样本筛选：{n0} → {len(df)} 个公司年度，{df.stkcd.nunique()} 家公司')
 
-    for v in ['Cash', 'Cash2', 'Size', 'Lev', 'ROA', 'Growth', 'TobinQ', 'CF', 'CFVol', 'NWC', 'Capex', 'SA']:
+    for v in ['Cash', 'Cash2', 'Size', 'Lev', 'ROA', 'Growth', 'TobinQ', 'CF', 'CFVol', 'NWC', 'Capex', 'SA', 'OREC_raw', 'OR_raw']:
         df[v] = winsor(df[v])
+    # 资金占用：减去同行业同年度均值（Jiang 等，2010；毛捷和管星华，2022）
+    df['OREC'] = df['OREC_raw'] - df.groupby(['ind', 'year'])['OREC_raw'].transform('mean')
+    df['OR'] = df['OR_raw'] - df.groupby(['ind', 'year'])['OR_raw'].transform('mean')
 
     for v in ['Pledge_ctrl', 'Flag']:
         if v not in df:
             df[v] = np.nan
     keep = ['stkcd', 'year', 'ind', 'prov', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Pledge_ctrl', 'Flag',
-            'SA', 'SOE', 'Capex'] + [c for c in CONTROLS if c not in ('Age',)] + ['Age']
+            'SA', 'SOE', 'Capex', 'OREC', 'OR'] + [c for c in CONTROLS if c not in ('Age',)] + ['Age']
     keep = list(dict.fromkeys(keep))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     df[keep].to_csv(out, index=False, encoding='utf-8-sig')

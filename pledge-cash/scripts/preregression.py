@@ -49,6 +49,8 @@ def main(panel, out):
     df['L_SA'] = g['SA'].shift(1).where(consec)
     df['HighFC'] = (df['L_SA'] > df.groupby('year')['L_SA'].transform('median')).astype(float).where(df['L_SA'].notna())
     df['Pledge_c'] = df['Pledge'] - df['Pledge'].mean()
+    # 上市年数：新上市公司现金高（募集资金）、质押低（限售期），需单独控制 IPO 生命周期
+    df['ipo_age'] = (df['year'] - df['listyear']).clip(0, 40).astype(int)
 
     X = ' + '.join(CONTROLS)
     base = df.dropna(subset=['Cash', 'Pledge'] + CONTROLS)
@@ -99,7 +101,25 @@ def main(panel, out):
     if 'Pledge_ctrl' in base and base['Pledge_ctrl'].notna().sum() > 1000:
         r8 = fit(f'Cash ~ Pledge_ctrl + {X} | stkcd + year', base.dropna(subset=['Pledge_ctrl']), 'Pledge_ctrl')
         L.append(row('(8) 控股股东口径（出质方标注为控股股东）', r8, 'Pledge_ctrl'))
+    X_noage = ' + '.join(c for c in CONTROLS if c != 'Age')
+    r9 = fit(f'Cash ~ Pledge + {X_noage} | stkcd + year + ipo_age', base, 'Pledge')
+    L.append(row('(9) 上市年数逐年固定效应（控制 IPO 生命周期）', r9, 'Pledge'))
+    r10 = fit(f'Cash ~ Pledge + {X_noage} | stkcd + year + ipo_age', base[base['ipo_age'] > 3], 'Pledge')
+    L.append(row('(10) 剔除上市后前 3 年 + 上市年数 FE', r10, 'Pledge'))
     L.append('')
+    L.append('**分时期**（上市年数 FE）\n')
+    L.append('| 设定 | 解释变量 | 系数 | 标准误 | p 值 | N | 组内 R² |\n|---|---|---|---|---|---|---|')
+    for lab, sub in [('2007—2015', base[base.year <= 2015]), ('2016—2025', base[base.year >= 2016])]:
+        L.append(row(lab, fit(f'Cash ~ Pledge + {X_noage} | stkcd + year + ipo_age', sub, 'Pledge'), 'Pledge'))
+    L.append('')
+    if 'OREC' in base and base['OREC'].notna().sum() > 1000 and base['OREC'].std() > 0:
+        L.append('**H2b 资金占用渠道**（被解释变量为资金占用，行业年度调整；上市年数 FE）\n')
+        L.append('| 设定 | 解释变量 | 系数 | 标准误 | p 值 | N | 组内 R² |\n|---|---|---|---|---|---|---|')
+        for lab, v, sub in [('OREC =（其他应收 − 其他应付）/ 总资产', 'OREC', base), ('OR = 其他应收款 / 总资产', 'OR', base),
+                            ('OREC，民营企业', 'OREC', base[base['SOE'] == 0])]:
+            sub = sub.dropna(subset=[v])
+            L.append(row(lab, fit(f'{v} ~ Pledge + {X_noage} | stkcd + year + ipo_age', sub, 'Pledge'), 'Pledge'))
+        L.append('')
     t = r2['model'].tidy()
     L.append('<details><summary>基准设定 (2) 的控制变量系数</summary>\n')
     L.append('| 变量 | 系数 | 标准误 | p 值 |\n|---|---|---|---|')
