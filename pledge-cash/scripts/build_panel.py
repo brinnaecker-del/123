@@ -168,6 +168,7 @@ def main(raw, out):
     # ---------------- 样本筛选 ----------------
     n0 = len(df)
     df = df[(df['year'] >= 2007) & (df['year'] <= 2025)]
+    df = df[df['stkcd'].str[:1].isin(['0', '3', '6'])]            # 只留沪深 A 股（剔除北交所 8/4/920 开头与 B 股 900/200 开头）
     df = df[~df['ind'].fillna('').str.startswith('J')]           # 金融业
     df = df[df['year'] >= df['listyear']]                        # 上市当年及以后
     df = df[df['Lev'] < 1]                                       # 资不抵债
