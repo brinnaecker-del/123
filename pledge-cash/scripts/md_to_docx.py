@@ -61,7 +61,7 @@ def add_inline(par, text, size=10.5, bold=False):
     for part in TOKEN.split(text):
         if not part:
             continue
-        if part.startswith('**') and part.endswith('**'):
+        if len(part) > 4 and part.startswith('**') and part.endswith('**'):
             add_inline(par, part[2:-2], size, True)
         elif part.startswith('[') and '](' in part:
             label, url = re.match(r'\[([^\]]+)\]\(([^)]+)\)', part).groups()
