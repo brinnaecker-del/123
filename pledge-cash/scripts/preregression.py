@@ -96,6 +96,9 @@ def main(panel, out):
     if base['Pledge_Ratio2'].notna().sum() > 1000:
         r7 = fit(f'Cash ~ Pledge_Ratio2 + {X} | stkcd + year', base.dropna(subset=['Pledge_Ratio2']), 'Pledge_Ratio2')
         L.append(row('(7) 占总股本口径', r7, 'Pledge_Ratio2'))
+    if 'Pledge_ctrl' in base and base['Pledge_ctrl'].notna().sum() > 1000:
+        r8 = fit(f'Cash ~ Pledge_ctrl + {X} | stkcd + year', base.dropna(subset=['Pledge_ctrl']), 'Pledge_ctrl')
+        L.append(row('(8) 控股股东口径（出质方标注为控股股东）', r8, 'Pledge_ctrl'))
     L.append('')
     t = r2['model'].tidy()
     L.append('<details><summary>基准设定 (2) 的控制变量系数</summary>\n')

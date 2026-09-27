@@ -44,6 +44,8 @@ CFG = {
     # S0303a 股份质押、冻结或托管标识：1 = 有（据 2004—2025 年分布推断，待 DES 说明确认），2/3 = 无
     'hld': dict(file='HLD_Shareholders', id='Stkcd', date='Reptdt', name='S0301a', rank='S0306a',
                 shares='S0302a', flag='S0303a', pct='S0304a', flag_yes='1'),
+    # 股东股权质押统计表（公司研究系列 → 股权质押 → 股东股权质押统计表）
+    'pled': dict(file='PLED_TRDSTAT', id='Symbol'),
     # 大股东质押比例：自己整理的文件（见 README）。有它就用它算质押比例；没有就只用十大股东标识生成是否质押
     'pl': dict(file='pledge_top1', id='Stkcd', year='Year',
                shares='Top1Shares',        # 年末第一大股东持股数
@@ -126,7 +128,14 @@ def main(raw, out):
     df = df.merge(mv[['stkcd', 'year', 'mv']].dropna().astype({'year': int}), on=['stkcd', 'year'], how='left')
 
     pl = load(raw, 'pl', required=False)
-    if pl is not None:
+    pled = load(raw, 'pled', required=False) if pl is None else None
+    if pled is not None:
+        import sys
+        sys.path.insert(0, HERE)
+        from pledge_from_csmar import top1_pledge
+        pl = top1_pledge(pled, load(raw, 'hld'), CFG['hld'])
+        pl = pl[['stkcd', 'year', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Top1', 'Pledge_ctrl', 'Flag']]
+    elif pl is not None:
         c = CFG['pl']
         pl = pl.assign(year=num(pl[c['year']]).astype(int), sh=num(pl[c['shares']]), pd_=num(pl[c['pledged']]),
                        Top1=num(pl[c['top1pct']]) / 100,
@@ -200,7 +209,10 @@ def main(raw, out):
     for v in ['Cash', 'Cash2', 'Size', 'Lev', 'ROA', 'Growth', 'TobinQ', 'CF', 'CFVol', 'NWC', 'Capex', 'SA']:
         df[v] = winsor(df[v])
 
-    keep = ['stkcd', 'year', 'ind', 'prov', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2',
+    for v in ['Pledge_ctrl', 'Flag']:
+        if v not in df:
+            df[v] = np.nan
+    keep = ['stkcd', 'year', 'ind', 'prov', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Pledge_ctrl', 'Flag',
             'SA', 'SOE', 'Capex'] + [c for c in CONTROLS if c not in ('Age',)] + ['Age']
     keep = list(dict.fromkeys(keep))
     os.makedirs(os.path.dirname(out), exist_ok=True)
