@@ -37,10 +37,14 @@ CFG = {
                ocf='C001000000',    # 经营活动产生的现金流量净额
                capex='C002006000'), # 购建固定资产、无形资产和其他长期资产支付的现金（拓展检验用，可缺）
     # 公司基本信息（股票市场系列 → 公司基本信息）
-    'co': dict(file='TRD_Co', id='Stkcd', listdt='Listdt', ind='Nnindcd'),  # 证监会2012行业代码，J 开头为金融
+    'co': dict(file='TRD_Co', id='Stkcd', listdt='Listdt', ind='Nnindcd', prov='PROVINCE'),  # 证监会2012行业代码，J 开头为金融
     # 年个股回报率文件，用其中的年末总市值（单位：千元）
     'mv': dict(file='TRD_Year', id='Stkcd', year='Trdynt', mv='Ysmvttl', mv_unit=1000),
-    # 大股东质押：按 README 第 2 步自己整理的四列文件（见 README）
+    # 十大股东文件（股东研究 → 十大股东）：取持股排名为 1 的股东
+    # S0303a 股份质押、冻结或托管标识：1 = 有（据 2004—2025 年分布推断，待 DES 说明确认），2/3 = 无
+    'hld': dict(file='HLD_Shareholders', id='Stkcd', date='Reptdt', name='S0301a', rank='S0306a',
+                shares='S0302a', flag='S0303a', pct='S0304a', flag_yes='1'),
+    # 大股东质押比例：自己整理的文件（见 README）。有它就用它算质押比例；没有就只用十大股东标识生成是否质押
     'pl': dict(file='pledge_top1', id='Stkcd', year='Year',
                shares='Top1Shares',        # 年末第一大股东持股数
                pledged='Top1PledgeShares', # 年末第一大股东质押（或冻结）股数
@@ -112,7 +116,8 @@ def main(raw, out):
     co = load(raw, 'co')
     c = CFG['co']
     co = co.assign(listyear=pd.to_datetime(co[c['listdt']], errors='coerce').dt.year,
-                   ind=co[c['ind']].str.strip())[['stkcd', 'listyear', 'ind']].drop_duplicates('stkcd')
+                   ind=co[c['ind']].str.strip(),
+                   prov=co[c['prov']].str.strip() if c['prov'] in co else np.nan)[['stkcd', 'listyear', 'ind', 'prov']].drop_duplicates('stkcd')
     df = df.merge(co, on='stkcd', how='left')
 
     mv = load(raw, 'mv')
@@ -120,16 +125,28 @@ def main(raw, out):
     mv = mv.assign(year=num(mv[c['year']]).astype('Int64'), mv=num(mv[c['mv']]) * c['mv_unit'])
     df = df.merge(mv[['stkcd', 'year', 'mv']].dropna().astype({'year': int}), on=['stkcd', 'year'], how='left')
 
-    pl = load(raw, 'pl')
-    c = CFG['pl']
-    pl = pl.assign(year=num(pl[c['year']]).astype(int), sh=num(pl[c['shares']]), pd_=num(pl[c['pledged']]),
-                   Top1=num(pl[c['top1pct']]) / 100,
-                   tot=num(pl[c['total']]) if c['total'] in pl else np.nan)
-    pl['Pledge'] = (pl['pd_'].fillna(0) / pl['sh']).clip(0, 1)
-    pl['Pledge_Dum'] = (pl['pd_'].fillna(0) > 0).astype(int)
-    pl['Pledge_Ratio2'] = (pl['pd_'].fillna(0) / pl['tot']).clip(0, 1)
-    df = df.merge(pl[['stkcd', 'year', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Top1']].drop_duplicates(['stkcd', 'year']),
-                  on=['stkcd', 'year'], how='left')
+    pl = load(raw, 'pl', required=False)
+    if pl is not None:
+        c = CFG['pl']
+        pl = pl.assign(year=num(pl[c['year']]).astype(int), sh=num(pl[c['shares']]), pd_=num(pl[c['pledged']]),
+                       Top1=num(pl[c['top1pct']]) / 100,
+                       tot=num(pl[c['total']]) if c['total'] in pl else np.nan)
+        pl['Pledge'] = (pl['pd_'].fillna(0) / pl['sh']).clip(0, 1)
+        pl['Pledge_Dum'] = (pl['pd_'].fillna(0) > 0).astype(int)
+        pl['Pledge_Ratio2'] = (pl['pd_'].fillna(0) / pl['tot']).clip(0, 1)
+        pl = pl[['stkcd', 'year', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Top1']]
+    else:
+        c = CFG['hld']
+        h = load(raw, 'hld')
+        h = h[h[c['rank']].astype(str).str.strip().isin(['1', '1.0'])]
+        h = h.assign(year=pd.to_datetime(h[c['date']], errors='coerce').dt.year,
+                     Top1=num(h[c['pct']]) / 100,
+                     Pledge_Dum=(h[c['flag']].astype(str).str.strip().str.replace('.0', '', regex=False) == c['flag_yes']).astype(int),
+                     Pledge=np.nan, Pledge_Ratio2=np.nan)
+        pl = h[['stkcd', 'year', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Top1']].dropna(subset=['year'])
+        pl['year'] = pl['year'].astype(int)
+        print('未找到质押比例文件，暂用十大股东「质押/冻结/托管标识」生成 Pledge_Dum（粗口径）')
+    df = df.merge(pl.drop_duplicates(['stkcd', 'year']), on=['stkcd', 'year'], how='left')
 
     soe = load(raw, 'soe', required=False)
     if soe is not None:
@@ -177,13 +194,13 @@ def main(raw, out):
         st = st.assign(year=num(st[CFG['st']['year']]).astype(int), _st=1)[['stkcd', 'year', '_st']]
         df = df.merge(st.drop_duplicates(), on=['stkcd', 'year'], how='left')
         df = df[df['_st'] != 1].drop(columns='_st')
-    df = df.dropna(subset=['Cash', 'Pledge'] + [c for c in CONTROLS if c != 'CFVol'])
+    df = df.dropna(subset=['Cash', 'Pledge_Dum'] + [c for c in CONTROLS if c != 'CFVol'])
     print(f'样本筛选：{n0} → {len(df)} 个公司年度，{df.stkcd.nunique()} 家公司')
 
     for v in ['Cash', 'Cash2', 'Size', 'Lev', 'ROA', 'Growth', 'TobinQ', 'CF', 'CFVol', 'NWC', 'Capex', 'SA']:
         df[v] = winsor(df[v])
 
-    keep = ['stkcd', 'year', 'ind', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2',
+    keep = ['stkcd', 'year', 'ind', 'prov', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2',
             'SA', 'SOE', 'Capex'] + [c for c in CONTROLS if c not in ('Age',)] + ['Age']
     keep = list(dict.fromkeys(keep))
     os.makedirs(os.path.dirname(out), exist_ok=True)

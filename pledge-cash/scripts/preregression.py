@@ -37,6 +37,9 @@ def row(label, r, key):
 
 def main(panel, out):
     df = pd.read_csv(panel, dtype={'stkcd': str})
+    rough = df['Pledge'].notna().sum() == 0
+    if rough:  # 还没有质押比例数据时，用是否质押代替，报告里会注明
+        df['Pledge'] = df['Pledge_Dum']
     df = df.sort_values(['stkcd', 'year'])
     df['ind1'] = df['ind'].fillna('NA').str[:1]
     df['ind_year'] = df['ind1'] + '_' + df['year'].astype(str)
@@ -51,6 +54,9 @@ def main(panel, out):
     base = df.dropna(subset=['Cash', 'Pledge'] + CONTROLS)
     L = []
     L.append('# 预回归结果\n')
+    if rough:
+        L.append('> **注意：本版为粗口径。**尚无质押比例数据，下文所有 `Pledge` 均为「第一大股东年末存在质押/冻结/托管」虚拟变量'
+                 '（十大股东文件 S0303a），混有冻结与托管，仅用于先看方向。拿到股权质押子库后需重跑。\n')
     L.append(f'数据：`{os.path.relpath(panel, os.path.dirname(out))}`；样本 {len(base):,} 个公司年度、{base.stkcd.nunique():,} 家公司，'
              f'{int(base.year.min())}—{int(base.year.max())} 年。\n')
     L.append('被解释变量 Cash = 货币资金 /（总资产 − 货币资金）；均控制公司与年度固定效应，括号内为公司聚类标准误。'
