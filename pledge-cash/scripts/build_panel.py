@@ -48,6 +48,8 @@ CFG = {
                 shares='S0302a', flag='S0303a', pct='S0304a', flag_yes='1'),
     # 股东股权质押统计表（公司研究系列 → 股权质押 → 股东股权质押统计表）
     'pled': dict(file='PLED_TRDSTAT', id='Symbol'),
+    # 股东股权质押情况明细表（同一子库），用于构造稳健性口径 Pledge_detl
+    'detl': dict(file='PLED_TRDDETL', id='Symbol'),
     # 大股东质押比例：自己整理的文件（见 README）。有它就用它算质押比例；没有就只用十大股东标识生成是否质押
     'pl': dict(file='pledge_top1', id='Stkcd', year='Year',
                shares='Top1Shares',        # 年末第一大股东持股数
@@ -158,6 +160,12 @@ def main(raw, out):
         pl['year'] = pl['year'].astype(int)
         print('未找到质押比例文件，暂用十大股东「质押/冻结/托管标识」生成 Pledge_Dum（粗口径）')
     df = df.merge(pl.drop_duplicates(['stkcd', 'year']), on=['stkcd', 'year'], how='left')
+    detl = load(raw, 'detl', required=False)
+    if detl is not None:
+        import sys
+        sys.path.insert(0, HERE)
+        from pledge_from_csmar import detail_top1_pledge
+        df = df.merge(detail_top1_pledge(detl, load(raw, 'hld'), CFG['hld']), on=['stkcd', 'year'], how='left')
 
     soe = load(raw, 'soe', required=False)
     if soe is not None:
@@ -217,10 +225,10 @@ def main(raw, out):
     df['OREC'] = df['OREC_raw'] - df.groupby(['ind', 'year'])['OREC_raw'].transform('mean')
     df['OR'] = df['OR_raw'] - df.groupby(['ind', 'year'])['OR_raw'].transform('mean')
 
-    for v in ['Pledge_ctrl', 'Flag']:
+    for v in ['Pledge_ctrl', 'Flag', 'Pledge_detl']:
         if v not in df:
             df[v] = np.nan
-    keep = ['stkcd', 'year', 'ind', 'prov', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Pledge_ctrl', 'Flag',
+    keep = ['stkcd', 'year', 'ind', 'prov', 'listyear', 'Cash', 'Cash2', 'Pledge', 'Pledge_Dum', 'Pledge_Ratio2', 'Pledge_ctrl', 'Flag', 'Pledge_detl',
             'SA', 'SOE', 'Capex', 'OREC', 'OR'] + [c for c in CONTROLS if c not in ('Age',)] + ['Age']
     keep = list(dict.fromkeys(keep))
     os.makedirs(os.path.dirname(out), exist_ok=True)

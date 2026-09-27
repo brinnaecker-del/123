@@ -101,6 +101,9 @@ def main(panel, out):
     if 'Pledge_ctrl' in base and base['Pledge_ctrl'].notna().sum() > 1000:
         r8 = fit(f'Cash ~ Pledge_ctrl + {X} | stkcd + year', base.dropna(subset=['Pledge_ctrl']), 'Pledge_ctrl')
         L.append(row('(8) 控股股东口径（出质方标注为控股股东）', r8, 'Pledge_ctrl'))
+    if 'Pledge_detl' in base and base['Pledge_detl'].notna().sum() > 1000:
+        r8b = fit(f'Cash ~ Pledge_detl + {X} | stkcd + year', base.dropna(subset=['Pledge_detl']), 'Pledge_detl')
+        L.append(row('(8b) 明细表口径（逐笔剩余质押数量加总）', r8b, 'Pledge_detl'))
     X_noage = ' + '.join(c for c in CONTROLS if c != 'Age')
     r9 = fit(f'Cash ~ Pledge + {X_noage} | stkcd + year + ipo_age', base, 'Pledge')
     L.append(row('(9) 上市年数逐年固定效应（控制 IPO 生命周期）', r9, 'Pledge'))
