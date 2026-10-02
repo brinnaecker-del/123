@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1210" height="696" viewBox="0 0 1210 696">
+<defs>
+ <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+  <path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker>
+</defs>
+<rect width="1210" height="696" fill="#fff"/>
+<g font-family="'Noto Serif CJK SC','Noto Serif CJK','SimSun',serif" fill="#111">
+<rect x="231" y="15" width="740" height="47" rx="0" fill="#fff" stroke="#111" stroke-width="2"/>
+<text x="601" y="46" font-size="22" font-weight="700" text-anchor="middle">新时代党的治藏方略：稳定、发展、生态、强边（四件大事）</text>
+<path d="M601,62 L601,80" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="455" y="82" width="293" height="40" rx="0" fill="#fff" stroke="#111" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="601.5" y="109" font-size="18" font-weight="700" text-anchor="middle">国家战略功能映射</text>
+<path d="M601,122 L601,131" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="122" y="133" width="956" height="137" rx="0" fill="#fff" stroke="#111" stroke-width="1.6" stroke-dasharray="6 4"/>
+<rect x="147" y="148" width="301" height="109" rx="0" fill="#fff" stroke="#111" stroke-width="1.6"/>
+<text x="297.5" y="173" font-size="17" font-weight="700" text-anchor="middle">安全功能（S）</text>
+<text x="297.5" y="196" font-size="15" text-anchor="middle">（稳定＋强边）</text>
+<text x="297.5" y="222" font-size="14" text-anchor="middle">边疆安全、社会稳定、民族团结、</text>
+<text x="297.5" y="244" font-size="14" text-anchor="middle">民生保障、治理效能</text>
+<rect x="462" y="148" width="274" height="109" rx="0" fill="#fff" stroke="#111" stroke-width="1.6"/>
+<text x="599.0" y="173" font-size="17" font-weight="700" text-anchor="middle">发展功能（D）</text>
+<text x="599.0" y="196" font-size="15" text-anchor="middle">（发展）</text>
+<text x="599.0" y="222" font-size="14" text-anchor="middle">经济增长质量、结构升级、效率提升、</text>
+<text x="599.0" y="244" font-size="14" text-anchor="middle">开放合作、共同富裕</text>
+<rect x="781" y="148" width="282" height="109" rx="0" fill="#fff" stroke="#111" stroke-width="1.6"/>
+<text x="922.0" y="173" font-size="17" font-weight="700" text-anchor="middle">生态屏障功能（E）</text>
+<text x="922.0" y="196" font-size="15" text-anchor="middle">（生态）</text>
+<text x="922.0" y="222" font-size="14" text-anchor="middle">生态安全、资源环境承载、生态保护修复、</text>
+<text x="922.0" y="244" font-size="14" text-anchor="middle">绿色低碳发展</text>
+<path d="M274,257 L274,296" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M599,257 L599,288" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M922,257 L922,296" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="158" y="298" width="232" height="99" rx="0" fill="#fff" stroke="#111" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="274" y="326" font-size="16" font-weight="700" text-anchor="middle">下界约束（底线）</text>
+<text x="274" y="352" font-size="15" text-anchor="middle">不可从下击穿</text>
+<text x="274" y="379" font-size="15" text-anchor="middle">为发展提供稳定与保障条件</text>
+<rect x="500" y="290" width="198" height="121" rx="0" fill="#fff" stroke="#111" stroke-width="2.6"/>
+<text x="599" y="316" font-size="17" font-weight="700" text-anchor="middle">发展（D）</text>
+<text x="599" y="341" font-size="16" font-weight="700" text-anchor="middle">约束条件下的响应变量</text>
+<text x="599" y="368" font-size="15" text-anchor="middle">在底线与边界约束下</text>
+<text x="599" y="391" font-size="15" text-anchor="middle">实现能力提升</text>
+<rect x="815" y="298" width="214" height="99" rx="0" fill="#fff" stroke="#111" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="922" y="326" font-size="16" font-weight="700" text-anchor="middle">上界约束（边界）</text>
+<text x="922" y="352" font-size="15" text-anchor="middle">不可从上突破</text>
+<text x="922" y="379" font-size="15" text-anchor="middle">约束发展方式与规模</text>
+<path d="M390,350 L498,350" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="444" y="338" font-size="12.5" text-anchor="middle">H1：降成本机制</text>
+<path d="M815,350 L700,350" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="757" y="338" font-size="12.5" text-anchor="middle">H2：价值转化机制</text>
+<path d="M274,397 L274,435 L922,435 L922,397" fill="none" stroke="#111" stroke-width="1.5"/>
+<path d="M599,411 L599,435" fill="none" stroke="#111" stroke-width="1.5"/>
+<path d="M599,428 L606,435 L599,442 L592,435 z" fill="#111"/>
+<path d="M599,442 L599,463" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="415" y="465" width="370" height="62" rx="0" fill="#fff" stroke="#111" stroke-width="1.6"/>
+<text x="600" y="491" font-size="17" font-weight="700" text-anchor="middle">三元协调状态（S—D—E）</text>
+<text x="600" y="517" font-size="16" text-anchor="middle">整体水平与结构失衡并存</text>
+<path d="M600,527 L600,546" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="415" y="548" width="370" height="64" rx="0" fill="#fff" stroke="#111" stroke-width="1.6"/>
+<text x="600" y="574" font-size="16.5" font-weight="700" text-anchor="middle">弱补偿性聚合：失衡惩罚型协调指数（MPI）</text>
+<text x="600" y="601" font-size="16" text-anchor="middle">降低高值维度对失衡的掩盖效应</text>
+<path d="M600,612 L600,630" fill="none" stroke="#111" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="415" y="632" width="370" height="58" rx="0" fill="#fff" stroke="#111" stroke-width="1.6"/>
+<text x="600" y="656" font-size="17" font-weight="700" text-anchor="middle">相对短板识别与动态转移</text>
+<text x="600" y="681" font-size="16" text-anchor="middle">H3：短板动态转移预期（S ⇄ D ⇄ E）</text>
+<rect x="95" y="498" width="195" height="172" rx="0" fill="#fff" stroke="#111" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="110" y="526" font-size="15" font-weight="700" text-anchor="start">辅助诊断与稳健性支持</text>
+<text x="112" y="552" font-size="14" text-anchor="start"><tspan font-family="Noto Sans CJK SC,sans-serif">•</tspan> 结构性贡献缺口</text>
+<text x="112" y="574" font-size="14" text-anchor="start"><tspan font-family="Noto Sans CJK SC,sans-serif">•</tspan> 局部敏感性分析</text>
+<text x="112" y="596" font-size="14" text-anchor="start"><tspan font-family="Noto Sans CJK SC,sans-serif">•</tspan> 留一法检验</text>
+<text x="112" y="618" font-size="14" text-anchor="start"><tspan font-family="Noto Sans CJK SC,sans-serif">•</tspan> 滚动端点稳定性</text>
+<text x="112" y="640" font-size="14" text-anchor="start"><tspan font-family="Noto Sans CJK SC,sans-serif">•</tspan> 基准上/下浮动检验</text>
+<text x="112" y="662" font-size="14" text-anchor="start"><tspan font-family="Noto Sans CJK SC,sans-serif">•</tspan> 通用范式对照</text>
+<path d="M290,578 L345,578" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="6 4"/>
+<path d="M345,492 L345,662" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="6 4"/>
+<path d="M345,492 L413,492" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+<path d="M345,578 L413,578" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+<path d="M345,662 L413,662" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+</g></svg>

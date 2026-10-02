@@ -123,8 +123,16 @@ d = d[:ts] + t + d[te:]
 print('ok 表6列宽')
 
 zout = zipfile.ZipFile(DST, 'w', zipfile.ZIP_DEFLATED)
+# 9 图1、图2 换为重绘版（figures/build_figs.py；宽高比与原图一致，版面尺寸不变）
+import os
+FIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'figures')
+MEDIA = {'word/media/image1.png': os.path.join(FIG, 'fig1.png'),
+         'word/media/image2.png': os.path.join(FIG, 'fig2.png')}
 for it in zin.infolist():
-    data = d.encode('utf8') if it.filename == 'word/document.xml' else zin.read(it.filename)
+    if it.filename in MEDIA:
+        data = open(MEDIA[it.filename], 'rb').read()
+    else:
+        data = d.encode('utf8') if it.filename == 'word/document.xml' else zin.read(it.filename)
     zout.writestr(it, data)
 zout.close()
 print('written', DST)
