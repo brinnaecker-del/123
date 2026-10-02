@@ -123,6 +123,12 @@ d = d[:ts] + t + d[te:]
 print('ok 表6列宽')
 
 zout = zipfile.ZipFile(DST, 'w', zipfile.ZIP_DEFLATED)
+# 10 正文说到本文方法时统一为“弱补偿”
+sub1('本文采用基于Mazziotta-Pareto非补偿性罚分思想的失衡惩罚指数', '本文采用基于Mazziotta-Pareto罚分思想的失衡惩罚指数', '§3(五) M-P')
+sub1('<w:t>，其理论基础与非补偿性聚合、失衡调整等方法一致</w:t>', '<w:t>，与非补偿性聚合、失衡调整等方法同属削弱维度间补偿的思路</w:t>', '§3(五) 理论基础')
+sub1('较少将非补偿性测度与区域功能理论', '较少将非补偿或弱补偿测度与区域功能理论', '§2(一) 文献缺口')
+sub1('本文所称的非补偿性因而是</w:t>', '本文所称的弱补偿性即</w:t>', '§3(五) 有限替代')
+
 # 9 图1、图2 换为重绘版（figures/build_figs.py；宽高比与原图一致，版面尺寸不变）
 import os
 FIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'figures')
