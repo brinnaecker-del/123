@@ -1,1 +1,5 @@
 node_modules/
+
+# 含个人信息，不入公开仓库
+review/author-info.local.json
+review/*含作者信息*.docx
