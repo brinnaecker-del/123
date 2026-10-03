@@ -319,6 +319,26 @@ nrefs = sum(1 for el in list(body)[refs_start + 1:] if re.match(r'\[\d+\] ', tex
 assert nrefs == len(seen), (nrefs, len(seen))
 print('引注 1…%d 顺序连续，文后 %d 条' % (len(seen), nrefs))
 
+# ---------------- 英文摘要：与中文摘要同步压缩（只改 "Abstract:" 之后的正文 run） ----------------
+EN_ABS = (" Xizang serves as a national ecological-security barrier, a border-security barrier and a pilot zone for "
+          "high-quality plateau economic development, functions that frameworks centred on economic performance cannot "
+          "fully capture. Drawing on the \"four major tasks\" of the Party's strategy for governing Xizang in the new era, "
+          "this paper builds a 13-indicator security\u2013development\u2013ecology framework and measures coordination over "
+          "2016\u20132025 with fixed-benchmark standardisation and an unbalance-penalty coordination index (MPI). "
+          "The MPI rises from 0.393 to 0.754. The lagging subsystem shifts from ecology (2016\u20132017) to development "
+          "(2018\u20132022), a finding robust across specifications, while security improves more slowly in 2023\u20132025. "
+          "A linear index built from the same indicators tracks the MPI closely (r = 0.979), so the framework adds value "
+          "by identifying phase-specific weak links by strategic function. The paper recommends upgrading services, "
+          "converting ecological assets into economic value, sustaining livelihood-security spending and monitoring "
+          "weak links dynamically.")
+abs_p = [el for el in body if el.tag == w('p') and text_of(el).startswith('Abstract:')]
+assert len(abs_p) == 1
+ts = [t for t in abs_p[0].iter(w('t'))]
+assert ts[0].text == 'Abstract:' and len(ts) == 2, [t.text[:10] for t in ts]
+ts[1].text = EN_ABS
+ts[1].set(XML_SPACE, 'preserve')
+print('ok 英文摘要', len(EN_ABS.split()), 'words')
+
 main = ''.join(text_of(el) for el in list(body)[:refs_start] if el.tag == w('p'))
 print('正文字数（含摘要、标题，不含表格与参考文献）约', len(re.sub(r'\s', '', main)))
 
