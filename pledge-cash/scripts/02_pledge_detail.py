@@ -11,9 +11,20 @@ import numpy as np
 import pandas as pd
 
 src, der = sys.argv[1], sys.argv[2]
-read = lambda f: pd.read_excel(f, header=0, skiprows=[1, 2], dtype={'Symbol': str, 'EventID': str})
 parts = sorted(glob.glob(os.path.join(src, '*PLED_TRDDETL*.xlsx')))
-d = pd.concat([read(f) for f in parts], ignore_index=True).drop_duplicates()
+# 第 1 卷带三行表头；后续分卷无表头、且前部为空行（接续第 1 卷行号），按第 1 卷列名对齐
+head = pd.read_excel(parts[0], header=0, skiprows=[1, 2], dtype=str)
+cols = list(head.columns)
+frames = [head]
+for f in parts[1:]:
+    x = pd.read_excel(f, header=None, dtype=str).dropna(how='all')
+    if str(x.iloc[0, 0]) == cols[0]:  # 若该卷也带表头
+        x = x.iloc[3:]
+    x.columns = cols
+    frames.append(x)
+d = pd.concat(frames, ignore_index=True).drop_duplicates()
+for c in ['EventSeq', 'NumBeforeChg', 'ChangeNum', 'NumAfterChg', 'NumHolderOwn', 'TotNumShares', 'ClosePrice']:
+    d[c] = pd.to_numeric(d[c], errors='coerce')
 d['ChangeDate'] = pd.to_datetime(d['ChangeDate'], errors='coerce')
 d['EndDate'] = pd.to_datetime(d['EndDate'], errors='coerce')
 d = d.sort_values(['EventID', 'ChangeDate', 'EventSeq'])
