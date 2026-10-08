@@ -19,7 +19,7 @@
 
 不带任何参数运行（或在 Windows 上直接双击本文件）时，进入问答模式，按提示输入股票和年份即可。
 
-依赖：pip install requests
+依赖：pip install requests openpyxl（openpyxl 只在用 Excel 名单时需要）
 """
 
 import argparse
@@ -173,30 +173,93 @@ def pick_reports(anns, start, end, include_all=False):
     return [a for y in sorted(by_year) for a in by_year[y]]
 
 
+def read_rows(path):
+    """把 Excel / CSV / TXT 读成二维列表（Excel 只读第一个工作表）。"""
+    suffix = path.suffix.lower()
+    if suffix in (".xlsx", ".xlsm"):
+        try:
+            import openpyxl
+        except ImportError:
+            sys.exit("读取 Excel 需要 openpyxl，请先运行：pip install openpyxl")
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        return [list(r) for r in wb.active.iter_rows(values_only=True)]
+    if suffix == ".xls":
+        sys.exit("暂不支持旧版 .xls，请在 Excel 里「另存为」.xlsx 后再用")
+    raw = path.read_bytes()
+    for enc in ("utf-8-sig", "gbk"):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    return list(csv.reader(text.splitlines()))
+
+
+def norm_code(v):
+    """单元格 -> 股票代码或简称；Excel 把 000858 存成 858 的情况补回前导 0。"""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return f"{int(v):06d}"
+    v = str(v).strip()
+    m = re.search(r"(?<!\d)\d{6}(?!\d)", v)  # 兼容 600519.SH、SZ000858 等写法
+    if m:
+        return m.group(0)
+    if v.isdigit() and len(v) < 6:
+        return v.zfill(6)
+    return v or None
+
+
+def load_keywords(path):
+    """从名单文件里取出股票代码（优先）或简称。
+
+    有表头时按「代码 / code」列取，没有代码列再找「简称 / 名称 / 公司」列；
+    没有表头时，每行取第一个像股票代码的格子，找不到就取第一个非空格子。
+    """
+    rows = [r for r in read_rows(Path(path)) if any(c not in (None, "") for c in r)]
+    for keys in (("代码", "code"), ("简称", "名称", "公司", "name")):
+        for i, row in enumerate(rows[:10]):
+            for j, cell in enumerate(row):
+                h = str(cell or "").lower()
+                if any(k in h for k in keys):
+                    vals = [norm_code(r[j]) for r in rows[i + 1:] if j < len(r)]
+                    return [v for v in vals if v]
+    result = []
+    for row in rows:
+        cells = [norm_code(c) for c in row if c not in (None, "")]
+        cells = [c for c in cells if c and not c.startswith("#")]
+        codes = [c for c in cells if re.fullmatch(r"\d{6}", c)]
+        if codes or cells:
+            result.append(codes[0] if codes else cells[0])
+    return result
+
+
 def run_cninfo(args):
     keywords = list(args.stocks)
     if args.file:
-        keywords += [ln.strip() for ln in Path(args.file).read_text(encoding="utf-8").splitlines()
-                     if ln.strip() and not ln.startswith("#")]
+        keywords += load_keywords(args.file)
+        print(f"从 {args.file} 读到 {len(keywords)} 家公司")
     if not keywords:
-        sys.exit("请提供股票代码 / 简称，或用 --file 指定列表文件")
+        sys.exit("请提供股票代码 / 简称，或用 --file 指定名单文件")
 
     end = args.end or datetime.now().year - 1
     start = args.start or end
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     cn = Cninfo(delay=args.delay)
-    index_rows, done = [], set()
+    index_rows, done, problems = [], set(), []
 
-    for kw in keywords:
-        print(f"\n== {kw} ==")
+    for n, kw in enumerate(keywords, 1):
+        print(f"\n== [{n}/{len(keywords)}] {kw} ==")
         try:
             hit = cn.lookup(kw)
         except requests.RequestException as e:
             print(f"  查询失败：{e}")
+            problems.append([kw, "", "", "查询公司失败（网络问题，重跑即可）"])
             continue
         if not hit:
             print("  巨潮资讯网上找不到这家公司，跳过")
+            problems.append([kw, "", "", "巨潮资讯网找不到这家公司"])
             continue
         code, org_id, name = hit
         if code in done:
@@ -208,11 +271,12 @@ def run_cninfo(args):
             anns = cn.announcements(code, org_id, start, end)
         except requests.RequestException as e:
             print(f"  获取公告列表失败：{e}")
+            problems.append([kw, code, name, "获取公告列表失败（网络问题，重跑即可）"])
             continue
         reports = pick_reports(anns, start, end, args.include_all)
-        if not reports:
-            print(f"  {start}–{end} 年度没有找到年报")
-            continue
+        for y in sorted(set(range(start, end + 1)) - {a["year"] for a in reports}):
+            print(f"  {y} 年度没有找到年报")
+            problems.append([kw, code, name, f"{y} 年度没有找到年报"])
         for a in reports:
             url = CNINFO_STATIC + a["adjunctUrl"]
             ext = Path(a["adjunctUrl"]).suffix or ".pdf"
@@ -222,10 +286,20 @@ def run_cninfo(args):
             pub = datetime.fromtimestamp(a["announcementTime"] / 1000).strftime("%Y-%m-%d")
             index_rows.append([code, name, a["year"], a["title"], pub, url,
                                str(dest) if ok else "下载失败"])
+            if not ok:
+                problems.append([kw, code, name, f"{a['year']} 年度下载失败（重跑即可）"])
             time.sleep(args.delay)
 
     write_index(out, ["代码", "简称", "报告年度", "标题", "披露日期", "原始链接", "本地文件"],
                 index_rows)
+    ok_count = sum(1 for r in index_rows if r[-1] != "下载失败")
+    print(f"\n汇总：{len(done)} 家公司，成功 {ok_count} 份，问题 {len(problems)} 项")
+    todo = out / "未完成清单.csv"
+    if problems:
+        write_index(out, ["输入", "代码", "简称", "问题"], problems, name=todo.name)
+        print(f"有问题的条目见 {todo}；网络类问题直接重跑即可，已下载的文件会自动跳过")
+    else:
+        todo.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------- 公司官网
@@ -335,16 +409,15 @@ def run_site(args):
     write_index(out, ["年份（推测）", "链接文字", "原始链接", "本地文件"], rows)
 
 
-def write_index(out, header, rows):
+def write_index(out, header, rows, name="index.csv"):
+    """每次运行重写清单（重跑时已存在的文件也会计入，不会重复追加）。"""
     if not rows:
         return
     out.mkdir(parents=True, exist_ok=True)
-    path = out / "index.csv"
-    new = not path.exists()
-    with open(path, "a", newline="", encoding="utf-8-sig") as f:
+    path = out / name
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        if new:
-            w.writerow(header)
+        w.writerow(header)
         w.writerows(rows)
     print(f"\n清单已写入 {path}")
 
@@ -362,22 +435,29 @@ def ask_year(prompt, default):
 def interactive():
     """不带参数运行时的问答模式，只走巨潮资讯网。"""
     print("巨潮资讯网 A 股年报下载（直接回车 = 用括号里的默认值）\n")
-    stocks = []
-    while not stocks:
-        stocks = re.split(r"[\s,，、;；]+", input("股票代码或简称，多个用空格隔开：").strip())
-        stocks = [x for x in stocks if x]
+    stocks, file = [], None
+    while not stocks and not file:
+        raw = input("股票代码或简称（多个用空格隔开），\n"
+                    "或者把名单文件（Excel / CSV / TXT）拖进这个窗口后回车：").strip()
+        path = raw.strip('"').strip("'").strip()
+        if path and Path(path).is_file():
+            file = path
+        else:
+            stocks = [x for x in re.split(r"[\s,，、;；]+", raw) if x]
     last = datetime.now().year - 1
     start = ask_year(f"起始报告年度（{last}）：", last)
     end = ask_year(f"截止报告年度（{max(start, last)}）：", max(start, last))
-    out = Path(__file__).resolve().parent / "年报"
-    args = argparse.Namespace(stocks=stocks, file=None, start=min(start, end),
+    here = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
+    out = here / "年报"
+    args = argparse.Namespace(stocks=stocks, file=file, start=min(start, end),
                               end=max(start, end), include_all=False, out=str(out), delay=1.0)
     run_cninfo(args)
     print(f"\n完成。文件在：{out}")
 
 
 def main():
-    if len(sys.argv) == 1:
+    # 不带参数运行、双击运行，或在 Jupyter / PyCharm 里粘贴运行时，进入问答模式
+    if len(sys.argv) == 1 or "ipykernel" in sys.modules:
         try:
             interactive()
         except Exception:
@@ -394,7 +474,7 @@ def main():
 
     c = sub.add_parser("cninfo", help="从巨潮资讯网下载 A 股上市公司年报")
     c.add_argument("stocks", nargs="*", help="股票代码或简称，可写多个")
-    c.add_argument("--file", help="列表文件，每行一个代码或简称")
+    c.add_argument("--file", help="名单文件：Excel(.xlsx) / CSV / TXT，自动识别「代码」或「简称」列")
     c.add_argument("--start", type=int, help="起始报告年度（默认与 --end 相同）")
     c.add_argument("--end", type=int, help="截止报告年度（默认去年）")
     c.add_argument("--include-all", action="store_true",
