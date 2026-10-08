@@ -95,10 +95,10 @@ class Cninfo:
 
     @staticmethod
     def column_of(code):
+        if code.startswith(("4", "8", "92")):  # 北交所（含 920 新代码），须先于沪市 9 开头判断
+            return "bj"
         if code.startswith(("6", "9")):
             return "sse"
-        if code.startswith(("4", "8", "92")):
-            return "bj"
         return "szse"
 
     def announcements(self, code, org_id, start, end):
