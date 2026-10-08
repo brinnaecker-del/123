@@ -1,4 +1,4 @@
-"""样本筛选与缩尾（供各回归脚本调用）。主口径与开题报告一致。"""
+"""样本筛选与缩尾（供各回归脚本调用）。样本筛选与缩尾沿用开题报告的做法。"""
 import numpy as np
 import pandas as pd
 
@@ -24,10 +24,13 @@ def load(path):
     s['Pledge'] = s['Pledge_raw'].clip(0, 1)
     s['Pledge_det'] = s['Pledge_det_raw'].clip(0, 1)
     s['Pledge_alt'] = s['Pledge_alt_raw'].clip(0, 1)
+    s['Pledge_rep'] = s['Pledge_rep_raw'].clip(0, 1)
     s['Pledge_gt1'] = (s['Pledge_raw'] > 1.0001).astype(float)
-    # 股权性质（复现开题报告）：股权性质含“国企”（含“国企,民营”“国企,外资”）=1，其余与缺失=0
+    # 股权性质：含“国企”（含“国企,民营”“国企,外资”）=1，其余=0；股权性质缺失者 SOE 为缺失（基准回归不用 SOE，保留这些观测；
+    # 产权性质相关检验中剔除）。SOE_rep 为开题报告口径（缺失记 0），仅用于复现对照
     s['SOE_raw'] = s['SOE']
-    s['SOE'] = s['EquityNature'].fillna('').str.contains('国企').astype(float)
+    s['SOE'] = s['EquityNature'].str.contains('国企').astype(float).where(s['EquityNature'].notna())
+    s['SOE_rep'] = s['SOE'].fillna(0.0)
     need = ['Cash', 'Pledge', 'SA'] + CTRL
     s = s.dropna(subset=need).copy()
     # 资金占用：在最终样本上做行业年度均值调整（未缩尾值）

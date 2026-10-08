@@ -1,9 +1,11 @@
 {
- "corr_stat_detail": 0.9637930436381165,
- "share_within_5pp": 0.9629815409309791,
- "agree_dum_flag1": 0.9540930979133226,
- "corr_among_pledgers": 0.8962346733913042,
- "share_within_5pp_among_pledgers": 0.9064211807668898,
- "share_raw_gt1": 0.027467897271268058,
- "share_raw_neg": 0.003089887640449438
+ "corr_stat_detail": 0.9867116131033926,
+ "share_within_5pp": 0.980318282608269,
+ "agree_dum_flag1": 0.9539451737603265,
+ "corr_among_pledgers": 0.9606115800342062,
+ "share_within_5pp_among_pledgers": 0.9501515829233139,
+ "share_raw_gt1": 0.02757010262749946,
+ "share_raw_neg": 0.003021918722160083,
+ "share_stale": 0.023410058672318046,
+ "share_stale_among_pledgers": 0.0602221100454316
 }

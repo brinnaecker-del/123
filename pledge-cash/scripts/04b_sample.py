@@ -9,4 +9,4 @@ from sample import load
 der = sys.argv[1]
 s = load(os.path.join(der, 'panel_raw.pkl'))
 s.to_pickle(os.path.join(der, 'sample.pkl'))
-print('回归样本', len(s), '个观测，', s.Stkcd.nunique(), '家公司；SOE 原始缺失记为 0 的', int(s.SOE_raw.isna().sum()), '个')
+print('回归样本', len(s), '个观测，', s.Stkcd.nunique(), '家公司；股权性质缺失（SOE 为缺失）的', int(s.SOE.isna().sum()), '个')

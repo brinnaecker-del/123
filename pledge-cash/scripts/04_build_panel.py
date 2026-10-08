@@ -56,26 +56,28 @@ yk = ye.rename(columns={'Symbol': 'Stkcd'})
 # 主口径（与开题报告一致）：排名第1股东；同一出质方ID的任一历史名称与其名称（基本口径）相同即匹配
 mm = match_stat(top1, ye, st, loose=False)
 mm.to_csv(os.path.join(der, 'matched_ids_main.csv'), index=False)
-mt = mm.merge(yk[['Stkcd', 'PledgorID', 'year', 'balance', 'last_date', 'TotNumShares']], on=['Stkcd', 'year', 'PledgorID'])
+mt = mm.merge(yk[['Stkcd', 'PledgorID', 'year', 'balance', 'balance_rep', 'last_date', 'TotNumShares']], on=['Stkcd', 'year', 'PledgorID'])
 pos = mt[mt['balance'] > 0]
-pl = mt.groupby(['Stkcd', 'year']).agg(pledged=('balance', 'sum'), totshares_pl=('TotNumShares', 'last')).reset_index()
+pl = mt.groupby(['Stkcd', 'year']).agg(pledged=('balance', 'sum'), pledged_rep=('balance_rep', 'sum'),
+                                       totshares_pl=('TotNumShares', 'last')).reset_index()
 newest = pos.groupby(['Stkcd', 'year'])['last_date'].max().rename('pl_last_date').reset_index()
 p = top1.merge(pl, on=['Stkcd', 'year'], how='left').merge(newest, on=['Stkcd', 'year'], how='left')
-p['pledged'] = p['pledged'].fillna(0.0)
+p[['pledged', 'pledged_rep']] = p[['pledged', 'pledged_rep']].fillna(0.0)
 p['Pledge_raw'] = p['pledged'] / p['Top1Shares']
+p['Pledge_rep_raw'] = p['pledged_rep'] / p['Top1Shares']   # 开题报告口径（复现对照）
 # 陈旧余额：有正余额，但所有正余额出质方的最后一条记录都早于年末 3 年以上
 p['pl_age'] = (pd.to_datetime(p['year'].astype(str) + '-12-31') - p['pl_last_date']).dt.days / 365.25
 p['Pledge_stale'] = ((p['pledged'] > 0) & (p['pl_age'] > 3)).astype(float)
 
-# 改进口径（稳健性）：仅全部解押时归零；非名义持有人为第一大股东；基本口径无匹配时用宽松口径；剔除重复出质方ID
+# 改进口径（稳健性）：非名义持有人为第一大股东；基本口径无匹配时用宽松口径；剔除重复出质方ID
 dup = pd.read_csv(os.path.join(der, 'pledgor_duplicate_ids.csv'), dtype=str)
 dupk = set(zip(dup.get('Symbol', []), dup.get('PledgorID', [])))
 ye_a = ye[[(a, b) not in dupk for a, b in zip(ye.Symbol, ye.PledgorID)]]
 t_a = top1[['Stkcd', 'year', 'Top1Name_nn', 'Top1Shares_nn']].rename(columns={'Top1Name_nn': 'Top1Name'}).dropna(subset=['Top1Name'])
 ma = match_stat(t_a, ye_a, st, loose=True)
 ma.to_csv(os.path.join(der, 'matched_ids_alt.csv'), index=False)
-mta = ma.merge(ye_a.rename(columns={'Symbol': 'Stkcd'})[['Stkcd', 'PledgorID', 'year', 'balance_alt']], on=['Stkcd', 'year', 'PledgorID'])
-pla = mta.groupby(['Stkcd', 'year'])['balance_alt'].sum().rename('pledged_alt').reset_index()
+mta = ma.merge(ye_a.rename(columns={'Symbol': 'Stkcd'})[['Stkcd', 'PledgorID', 'year', 'balance']], on=['Stkcd', 'year', 'PledgorID'])
+pla = mta.groupby(['Stkcd', 'year'])['balance'].sum().rename('pledged_alt').reset_index()
 p = p.merge(pla, on=['Stkcd', 'year'], how='left')
 p['pledged_alt'] = p['pledged_alt'].fillna(0.0)
 p['Pledge_alt_raw'] = p['pledged_alt'] / p['Top1Shares_nn']
@@ -135,14 +137,18 @@ df['TobinQ_alt'] = (df['mv_full'] + df['tl']) / df['ta']
 lagrev = lag('rev')
 df['Growth_alt'] = (df['rev'] / lagrev - 1).where(lagrev > 0)
 df['Top1_alt'] = df['Top1Pct_nn'] / 100.0
-# SA：Size 为总资产（百万元）对数，上限 370 亿元；Age 为上市年数，上限 37 年（开题报告表3）
-size_m = np.log(np.minimum(df['ta'] / 1e6, 37000.0))
+# SA（Hadlock 和 Pierce，2010）：Size 为总资产按 2004 年汇率 8.28 元/美元折算的百万美元对数，上限 4,500（约 372.6 亿元）；
+# Age 为上市年数，上限 37 年。原文系数以美元计，若直接用人民币百万元，二次项拐点降至约 52.7 亿元，规模效应在大半样本区间反转
 age_c = np.minimum(df['ListAge'].clip(lower=0), 37)
-df['SA'] = -0.737 * size_m + 0.043 * size_m ** 2 - 0.040 * age_c
-# 行业（复现开题报告）：Ind 为证监会门类，用于行业×年度固定效应与行业年度均值；
-# Ind7 为表7混合回归的行业虚拟变量：制造业按代码首位数字（C1—C4），其余为门类
-df['Ind'] = df['Nnindcd'].str[0]
-df['Ind7'] = np.where(df['Nnindcd'].str[0] == 'C', df['Nnindcd'].str[:2], df['Nnindcd'].str[0])
+size_u = np.log(np.minimum(df['ta'] / 1e6 / 8.28, 4500.0))
+df['SA'] = -0.737 * size_u + 0.043 * size_u ** 2 - 0.040 * age_c
+size_m = np.log(np.minimum(df['ta'] / 1e6, 37000.0))   # 开题报告原口径（人民币百万元），仅用于对照
+df['SA_rmb'] = -0.737 * size_m + 0.043 * size_m ** 2 - 0.040 * age_c
+# 行业：制造业按证监会2012版两位大类（如 C26），其余按门类；用于行业×年度固定效应、行业年度均值与表7混合回归
+df['Ind'] = np.where(df['Nnindcd'].str[0] == 'C', df['Nnindcd'].str[:3], df['Nnindcd'].str[0])
+# 开题报告口径（复现对照）：行业×年度按门类；表7混合回归制造业按代码首位数字
+df['Ind_rep'] = df['Nnindcd'].str[0]
+df['Ind7_rep'] = np.where(df['Nnindcd'].str[0] == 'C', df['Nnindcd'].str[:2], df['Nnindcd'].str[0])
 
 # ---------- 样本筛选标记 ----------
 df['is_ST'] = df['FSName'].str.contains('ST', na=False)
