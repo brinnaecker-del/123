@@ -17,6 +17,8 @@
 
      python fetch_reports.py site https://ir.example.com/reports --depth 2
 
+不带任何参数运行（或在 Windows 上直接双击本文件）时，进入问答模式，按提示输入股票和年份即可。
+
 依赖：pip install requests
 """
 
@@ -31,7 +33,12 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urldefrag, unquote
 
-import requests
+try:
+    import requests
+except ImportError:
+    print("缺少 requests 库，请先在命令行运行：pip install requests")
+    input("按回车键退出…")
+    sys.exit(1)
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -179,7 +186,7 @@ def run_cninfo(args):
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     cn = Cninfo(delay=args.delay)
-    index_rows = []
+    index_rows, done = [], set()
 
     for kw in keywords:
         print(f"\n== {kw} ==")
@@ -192,6 +199,10 @@ def run_cninfo(args):
             print("  巨潮资讯网上找不到这家公司，跳过")
             continue
         code, org_id, name = hit
+        if code in done:
+            print(f"  {code} {name} 前面已处理过，跳过")
+            continue
+        done.add(code)
         print(f"  {code} {name}（orgId={org_id}）")
         try:
             anns = cn.announcements(code, org_id, start, end)
@@ -338,7 +349,44 @@ def write_index(out, header, rows):
     print(f"\n清单已写入 {path}")
 
 
+def ask_year(prompt, default):
+    while True:
+        v = input(prompt).strip()
+        if not v:
+            return default
+        if re.fullmatch(r"(19|20)\d{2}", v):
+            return int(v)
+        print("  请输入四位年份，例如 2023")
+
+
+def interactive():
+    """不带参数运行时的问答模式，只走巨潮资讯网。"""
+    print("巨潮资讯网 A 股年报下载（直接回车 = 用括号里的默认值）\n")
+    stocks = []
+    while not stocks:
+        stocks = re.split(r"[\s,，、;；]+", input("股票代码或简称，多个用空格隔开：").strip())
+        stocks = [x for x in stocks if x]
+    last = datetime.now().year - 1
+    start = ask_year(f"起始报告年度（{last}）：", last)
+    end = ask_year(f"截止报告年度（{max(start, last)}）：", max(start, last))
+    out = Path(__file__).resolve().parent / "年报"
+    args = argparse.Namespace(stocks=stocks, file=None, start=min(start, end),
+                              end=max(start, end), include_all=False, out=str(out), delay=1.0)
+    run_cninfo(args)
+    print(f"\n完成。文件在：{out}")
+
+
 def main():
+    if len(sys.argv) == 1:
+        try:
+            interactive()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            print("\n出错了，请把上面的报错信息截图或复制下来。")
+        input("\n按回车键退出…")
+        return
+
     ap = argparse.ArgumentParser(description="企业年报批量下载",
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__)

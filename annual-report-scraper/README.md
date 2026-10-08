@@ -4,6 +4,25 @@
 pip install requests
 ```
 
+## 最简单的用法：问答模式
+
+装好 Python 和 requests 后，**直接双击 `fetch_reports.py`**（或在命令行运行 `python fetch_reports.py`，不带参数），按提示输入：
+
+```
+股票代码或简称，多个用空格隔开：600519 000858 宁德时代
+起始报告年度（2025）：2019
+截止报告年度（2025）：2024
+```
+
+年报会下载到脚本旁边的 `年报` 文件夹里。
+
+### 第一次使用的准备（Windows）
+
+1. 到 https://www.python.org/downloads/ 下载安装 Python，安装时**勾选 “Add python.exe to PATH”**。
+2. 按 Win+R，输入 `cmd` 回车，在黑色窗口里运行：`pip install requests`
+   （下载慢可以换清华镜像：`pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple`）
+3. 双击 `fetch_reports.py` 即可。
+
 ## 模式一：巨潮资讯网（A 股上市公司，推荐）
 
 巨潮资讯网是证监会指定的信息披露网站，沪、深、北交所所有上市公司的年报都在上面，比逐家翻公司官网稳定得多。
