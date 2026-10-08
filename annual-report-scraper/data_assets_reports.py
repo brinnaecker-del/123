@@ -29,6 +29,7 @@ except ImportError:
 SAVE_DIR = r"E:\数据资产入表年报"   # 保存位置
 
 # 高金《中国企业数据资产入表情况跟踪报告》2024 年度，表 1.5，100 家，按原表顺序
+# 「简称=代码」的是后来改了名的：航天宏图现为 *ST航图，通行宝现为苏交数智
 LIST_2024 = """
 中国移动 中国联通 中国电信 同方股份 科大讯飞 合合信息 航天宏图=688066 每日互动 拓尔思 卓创资讯
 小商品城 神马股份 开普云 光大银行 万兴科技 广联达 九州通 神州数码 海天瑞声 北汽蓝谷
@@ -36,7 +37,7 @@ LIST_2024 = """
 中文在线 金域医学 中国交建 中材国际 蓝色光标 国泰海通 招商港口 宁波银行 国源科技 人民网
 健之佳 中信银行 新希望 吉视传媒 佳华科技 东方证券 齐鲁银行 泰尔股份 广电运通 捷顺科技
 泰达股份 杭州银行 金盘科技 山东高速 世纪恒通 龙源电力 山东黄金 光启技术 上海钢联 中信建投
-申通快递 蕾奥规划 新疆天业 药易购 海格通信 零点有数 物产中大 南京公用 通行宝 天威视讯
+申通快递 蕾奥规划 新疆天业 药易购 海格通信 零点有数 物产中大 南京公用 通行宝=301339 天威视讯
 首创环保 王力安防 五芳斋 大西洋 东华软件 镇洋发展 何氏眼科 方正科技 长江证券 日照港
 轻纺城 皖通高速 广电计量 航天工程 华设集团 吉大通信 创业环保 设计总院 山东玻纤 绿城水务
 中原高速 兴蓉环境 隧道股份 光明乳业 上海电气 兴通股份 青岛港 浙江交科 凌云光 北辰实业
@@ -55,7 +56,7 @@ LIST_2025 = """
 佳华科技 中文在线 吉视传媒 金盘科技 宁波银行 中泰证券 山东钢铁 北京建材=000786 泰达股份 新希望
 广电运通 泸州老窖 何氏眼科 齐鲁银行 泰尔股份 粤高速A 世纪恒通 西部证券 皖通高速 光启技术
 中信建投 五芳斋 山金国际 药易购 蕾奥规划 新疆天业 渝农商行 天威视讯 浙江交科 首创环保
-南京公用 首钢股份 创业环保 济南中拓=000906 财通证券 通行宝 上海建工 镇洋发展 东华软件 郑州煤电
+南京公用 首钢股份 创业环保 济南中拓=000906 财通证券 通行宝=301339 上海建工 镇洋发展 东华软件 郑州煤电
 王力安防 海格通信 零点有数 方正科技 航天工程 长江证券 广电计量 轻纺城 南方传媒 青岛啤酒
 大西洋 金隅集团 金圆股份 顺控发展 中原环保 山东玻纤 中百集团 华设集团 吉大通信 浙江建投
 中原高速 武商集团 凌云光 信达证券 绿城水务 上港集团 兴通股份 青拓技术=青矩技术 隧道股份 金房能源
@@ -145,8 +146,8 @@ class Cninfo:
             return "sse"
         return "szse"
 
-    def announcements(self, code, org_id, start, end):
-        """查询某公司指定年度区间的全部年报类公告。"""
+    def announcements(self, code, org_id, start, end, category="category_ndbg_szsh;", searchkey=""):
+        """查询某公司指定年度区间的年报类公告（默认只查「年报」栏目）。"""
         # 第 N 年的年报在第 N+1 年披露，个别公司会拖到下半年
         se_date = f"{start + 1}-01-01~{end + 1}-12-31"
         columns = [self.column_of(code)]
@@ -158,7 +159,7 @@ class Cninfo:
                 data = {
                     "pageNum": page, "pageSize": 30, "column": column,
                     "tabName": "fulltext", "plate": "", "stock": f"{code},{org_id}",
-                    "searchkey": "", "secid": "", "category": "category_ndbg_szsh;",
+                    "searchkey": searchkey, "secid": "", "category": category,
                     "trade": "", "seDate": se_date, "sortName": "", "sortAsc": "",
                     "isHLtitle": "true",
                 }
@@ -272,14 +273,21 @@ def main():
             p[f"{y}名单"] = "是"
             print(f"  {code} {name}")
             try:
-                a = pick_reports(cn.announcements(code, org_id, y, y), [y]).get(y)
+                anns = cn.announcements(code, org_id, y, y)
+                a = pick_reports(anns, [y]).get(y)
+                if not a:  # 个别公司年报全文没归进「年报」栏目（如东方证券 2025 年只归了摘要），按标题再搜一次
+                    anns += cn.announcements(code, org_id, y, y, category="", searchkey="年度报告")
+                    a = pick_reports(anns, [y]).get(y)
             except requests.RequestException as e:
                 row["备注"] = "获取公告列表失败（网络问题，重跑即可）"
                 print(f"  获取公告列表失败：{e}")
                 continue
             if not a:
                 row["年报"] = p[f"{y}年报"] = "没找到"
-                print(f"  {y} 年度没找到年报")
+                seen_titles = sorted({re.sub(r"<[^>]+>", "", x.get("announcementTitle", "")) for x in anns})
+                if seen_titles:
+                    row["备注"] = "巨潮上能看到的相关公告：" + "；".join(seen_titles[:5])
+                print(f"  {y} 年度没找到年报。{row['备注']}")
                 continue
             url = CNINFO_STATIC + a["adjunctUrl"]
             ext = Path(a["adjunctUrl"]).suffix or ".pdf"
