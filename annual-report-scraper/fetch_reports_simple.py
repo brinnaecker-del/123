@@ -33,7 +33,7 @@ CNINFO = "https://www.cninfo.com.cn"
 CNINFO_STATIC = "https://static.cninfo.com.cn/"
 
 # 默认剔除的公告：摘要、英文版、已取消的、以及年报相关的其他公告
-EXCLUDE_WORDS = ["半年度", "季度", "摘要", "英文", "English", "已取消", "取消", "提示性公告", "更正公告",
+EXCLUDE_WORDS = ["半年度", "季度", "摘要", "英文", "English", "H股", "海外监管", "已取消", "取消", "提示性公告", "更正公告",
                  "补充公告", "审核意见", "说明", "披露", "问询", "回复"]
 
 
