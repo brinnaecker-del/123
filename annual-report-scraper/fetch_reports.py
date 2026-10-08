@@ -460,6 +460,8 @@ def main():
     if len(sys.argv) == 1 or "ipykernel" in sys.modules:
         try:
             interactive()
+        except SystemExit as e:  # 例如缺少 openpyxl：先显示原因，别让窗口一闪就关
+            print(e)
         except Exception:
             import traceback
             traceback.print_exc()
