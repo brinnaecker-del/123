@@ -21,3 +21,10 @@ def cell(m, var, nd=4):
 
 def stats(m):
     return f'{m._adj_r2:.3f}', f'{m._N:,}'
+
+def pval(m, var):
+    return float(m.tidy().loc[var, 'Pr(>|t|)'])
+
+def ci95(m, var):
+    t = m.tidy().loc[var]
+    return [float(t['2.5%']), float(t['97.5%'])]

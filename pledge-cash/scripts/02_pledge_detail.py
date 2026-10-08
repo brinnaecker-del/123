@@ -1,14 +1,18 @@
-"""由 CSMAR 股东股权质押情况明细表（PLED_TRDDETL，可多个分卷）推算出质方年末未解押质押股数，
-并与第一大股东面板匹配，得到“明细表口径”的第一大股东质押比例。
+"""整理 CSMAR 股东股权质押情况明细表（PLED_TRDDETL，可多个分卷），输出“事件—年度”余额与事件信息。
 
 用法：python -I 02_pledge_detail.py <输入目录> <派生目录>
-输入目录放 PLED_TRDDETL*.xlsx；派生目录须已有 01_top1_panel.py 输出的 top1_panel.csv。
-规则：每个 EventID 取变动日期不晚于当年 12 月 31 日的最后一条记录，其 NumAfterChg 即年末余额；
-不做任何插补。另报告一个敏感性口径：最后一条记录之后已过合同结束日期且无解押记录的，视为已解押。
+输出：
+- pled_detail_all.pkl：全部明细记录（05 复用）
+- detail_event_info.pkl：每个 EventID 的公司、出质方ID、起始日、起始日收盘价、历史上出现过的全部名称（基本与宽松口径）、
+  全部记录中最新的结束日期
+- detail_event_year.pkl：每年 12 月 31 日前最后一条记录的剩余质押数量（>0 者），及该记录日期
+与第一大股东的匹配在 04（质押比例明细表口径）与 05（平仓压力）中用同一规则完成（matching.py）。不做任何插补。
 """
-import sys, glob, os, re
+import sys, glob, os
 import numpy as np
 import pandas as pd
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from names import norm_basic, norm_loose
 
 src, der = sys.argv[1], sys.argv[2]
 parts = sorted(glob.glob(os.path.join(src, '*PLED_TRDDETL*.xlsx')))
@@ -18,62 +22,45 @@ cols = list(head.columns)
 frames = [head]
 for f in parts[1:]:
     x = pd.read_excel(f, header=None, dtype=str).dropna(how='all')
-    if str(x.iloc[0, 0]) == cols[0]:  # 若该卷也带表头
+    if str(x.iloc[0, 0]) == cols[0]:
         x = x.iloc[3:]
     x.columns = cols
     frames.append(x)
 d = pd.concat(frames, ignore_index=True).drop_duplicates()
 for c in ['EventSeq', 'NumBeforeChg', 'ChangeNum', 'NumAfterChg', 'NumHolderOwn', 'TotNumShares', 'ClosePrice']:
     d[c] = pd.to_numeric(d[c], errors='coerce')
-d['ChangeDate'] = pd.to_datetime(d['ChangeDate'], errors='coerce')
-d['EndDate'] = pd.to_datetime(d['EndDate'], errors='coerce')
+for c in ['ChangeDate', 'StartDate', 'EndDate']:
+    d[c] = pd.to_datetime(d[c], errors='coerce')
+d['name'] = d['Pledgor'].map(norm_basic)
+d['name_loose'] = d['Pledgor'].map(norm_loose)
 d = d.sort_values(['EventID', 'ChangeDate', 'EventSeq'])
+d.to_pickle(os.path.join(der, 'pled_detail_all.pkl'))
 
-def norm(s):
-    s = str(s).strip().replace('（', '(').replace('）', ')')
-    return re.sub(r'\s+', '', s)
-d['name'] = d['Pledgor'].map(norm)
+g = d.groupby('EventID')
+first = g.head(1).set_index('EventID')
+info = pd.DataFrame({'Stkcd': first['Symbol'], 'PledgorID': first['PledgorID'], 'start': first['StartDate'],
+                     'P0': first['ClosePrice']})
+info['names'] = g['name'].agg(lambda s: frozenset(s))
+info['names_loose'] = g['name_loose'].agg(lambda s: frozenset(s))
+info['end_full'] = d.dropna(subset=['EndDate']).groupby('EventID')['EndDate'].last()
+info.to_pickle(os.path.join(der, 'detail_event_info.pkl'))
 
-years = range(2004, 2026)
 rows = []
-for y in years:
+for y in range(2004, 2026):
     cut = pd.Timestamp(f'{y}-12-31')
     last = d[d['ChangeDate'] <= cut].groupby('EventID').tail(1)
-    out = last['NumAfterChg'].astype(float)
-    expired = last['EndDate'].notna() & (last['EndDate'] < cut)
-    g = pd.DataFrame({'Stkcd': last['Symbol'], 'name': last['name'], 'year': y,
-                      'pledged': out, 'pledged_endadj': out.where(~expired, 0.0)})
-    rows.append(g.groupby(['Stkcd', 'name', 'year'], as_index=False)[['pledged', 'pledged_endadj']].sum())
-bal = pd.concat(rows, ignore_index=True)
-bal.to_csv(os.path.join(der, 'pledgor_yearend_balance.csv'), index=False, encoding='utf-8-sig')
+    last = last[last['NumAfterChg'] > 0]
+    rows.append(pd.DataFrame({'EventID': last['EventID'].to_numpy(), 'year': y, 'bal': last['NumAfterChg'].to_numpy(float),
+                              'last_date': last['ChangeDate'].to_numpy()}))
+ey = pd.concat(rows, ignore_index=True)
+ey.to_pickle(os.path.join(der, 'detail_event_year.pkl'))
 
-top1 = pd.read_csv(os.path.join(der, 'top1_panel.csv'), dtype={'Stkcd': str})
-top1['name'] = top1['Top1Name'].map(norm)
-codes = sorted(d['Symbol'].unique())
-lo, hi = codes[0], codes[-1]
-# 仅保留明细表分卷完整覆盖的代码区间（末尾代码可能被截断，剔除）
-cov = top1[(top1['Stkcd'] >= lo) & (top1['Stkcd'] < hi)].copy()
-m = cov.merge(bal, on=['Stkcd', 'name', 'year'], how='left')
-m[['pledged', 'pledged_endadj']] = m[['pledged', 'pledged_endadj']].fillna(0.0)
-m['Pledge_detail'] = m['pledged'] / m['Top1Shares']
-m['Pledge_detail_endadj'] = m['pledged_endadj'] / m['Top1Shares']
-m['Pledge_Ratio2_detail'] = np.nan  # 须总股本，待交易/股本数据
-m.to_csv(os.path.join(der, 'pledge_detail_panel.csv'), index=False, encoding='utf-8-sig')
-
-firm_pledge = set(d['Symbol'])
+x = d.NumBeforeChg + d.ChangeNum - d.NumAfterChg
 rep = [
-    f'明细表分卷：{[os.path.basename(p) for p in parts]}；记录 {len(d)} 条、事件 {d.EventID.nunique()} 个、公司 {len(firm_pledge)} 家，代码 {lo}—{hi}',
-    f'用于匹配的代码区间：[{lo}, {hi})（末尾代码 {hi} 可能跨分卷，剔除）；第一大股东公司—年度 {len(m)} 个',
-    f'其中第一大股东名下有未解押余额的 {int((m.pledged > 0).sum())} 个；比例>1 的 {int((m.Pledge_detail > 1.0001).sum())} 个（未截断，待核）',
-    f'有余额但最后记录已过合同结束日的余额占比：{(1 - m.pledged_endadj.sum() / m.pledged.sum()):.3f}',
+    f'明细表分卷：{[os.path.basename(p) for p in parts]}；记录 {len(d)} 条、事件 {d.EventID.nunique()} 个、公司 {d.Symbol.nunique()} 家',
+    f'剩余质押数量 = 初始数量 + 数量增减 不成立的记录 {int((x.abs() > 1).sum())} 条',
+    f'事件—年度（年末剩余数量>0）{len(ey)} 个',
+    f'同一事件出现多个名称的 {int((info.names.map(len) > 1).sum())} 个；同一事件出现多个出质方ID的 {int((g.PledgorID.nunique() > 1).sum())} 个',
 ]
-# 该区间内有质押事件、但第一大股东名称从未与出质方匹配上的公司（可能名称不一致）
-any_top1 = m[m.pledged > 0]['Stkcd'].unique()
-rel1 = d[d['RelationtoComCode'].astype(str).str.contains('1')]['Symbol'].unique()
-miss = sorted(set(rel1) & set(cov.Stkcd) - set(any_top1))
-rep.append(f'明细表中有“控股股东”质押、但从未与第一大股东名称匹配上的公司 {len(miss)} 家（需核对名称）：{miss[:20]}')
-rep.append('Pledge_detail>0 与十大股东文件 S0303a 原始代码的交叉表（2007年起）：')
-mm = m[m.year >= 2007]
-rep.append(pd.crosstab(mm.Pledge_detail > 0, mm.Top1Flag_raw).to_string())
 open(os.path.join(der, '质押明细核查报告.txt'), 'w', encoding='utf-8').write('\n'.join(rep))
 print('\n'.join(rep))
