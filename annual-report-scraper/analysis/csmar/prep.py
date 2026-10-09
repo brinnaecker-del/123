@@ -8,7 +8,8 @@ p = pd.read_pickle("csmar/master.pkl")
 p = p[(p.year >= 2020) & (p.fin == 0)].copy()                 # 非金融
 mine = pd.read_csv(SAMPLE, dtype={"代码": str, "年度": str})
 mine["Stkcd"] = mine.代码.replace({"835184": "920184", "836208": "920208"})
-listed = {int(y): set(g.Stkcd) for y, g in mine.groupby("年度")}
+# 高金名单中经核对实际未列报数据资源的（神马股份 2024、金圆股份 2025、信达证券 2025）不算入表
+listed = {int(y): set(g[g.入表期末 > 0].Stkcd) for y, g in mine.groupby("年度")}
 cs = {y: set(p[(p.year == y) & (p.DR > 0)].Stkcd) for y in (2024, 2025)}
 adopt = {y: listed[y] | cs[y] for y in (2024, 2025)}
 first = {}
