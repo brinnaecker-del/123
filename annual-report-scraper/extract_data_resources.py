@@ -241,6 +241,10 @@ def unit_near(texts, i):
 def from_balance_sheet(doc, start, wide, unit):
     rows = [(i, r) for i in range(start, min(start + 8, len(doc))) for r in page_rows(doc[i])]
     parsed = [(i, r, *parse_row(r, unit)) for i, r in rows]
+
+    def left_side(i, r):  # 项目名在页面左侧；资产、负债左右并排时，右半边是负债
+        return r[0][0] < doc[i].rect.width * 0.4
+
     # 资产部分：从标题开始，到资产总计 / 负债 / 下一张报表为止
     body = []
     for k, item in enumerate(parsed):
@@ -248,7 +252,7 @@ def from_balance_sheet(doc, start, wide, unit):
         if k > 0 and title_kind(row_text(r)) in ("parent", "other"):
             break
         body.append(item)
-        if label.startswith(END_LABELS):
+        if label.startswith(END_LABELS) and left_side(i, r):
             break
     cols = columns([cells for _, _, _, cells, extra in body if not extra], wide)
 
@@ -271,7 +275,7 @@ def from_balance_sheet(doc, start, wide, unit):
             parent = next((p for p in reversed(recent) if p in PARENTS), None)
             lines.append({"parent": parent or f"其他（{recent[-1] if recent else ''}）", "end": end, "begin": begin,
                           "page": i + 1, "raw": raw, "source": "资产负债表"})
-        elif not label.startswith("其中"):
+        elif not label.startswith("其中") and left_side(i, r):
             lab = clean_label(label)
             if lab and "公司" not in lab and "编制单位" not in lab and lab != "项目":
                 recent.append(lab)
@@ -283,63 +287,86 @@ OTHER_HEADS = ("原值", "原价", "成本", "累计摊销", "减值准备")
 
 
 def from_notes(doc, texts, start, unit, year):
-    """报表正文没有数据资源行时，到附注里找无形资产明细表中「数据资源」一列的期末、期初账面价值。"""
-    for i in range(start + 1, len(doc)):
-        if "数据资源" not in texts[i] or not any(h in texts[i] for h in BOOK_HEADS):
+    """报表正文没有数据资源行时，到附注里找无形资产明细表中「数据资源」一列的期末、期初账面价值。
+
+    表头所在页和下一页连起来看（表格常跨页）；遇到下一张表的表头（如「本银行」的明细）就停。
+    """
+    i = start + 1
+    while i < len(doc):
+        if "数据资源" not in texts[i]:
+            i += 1
             continue
         col, end, begin, raw, in_book_value = None, None, None, [], False
         page_unit = unit_near(texts, i) or unit
-        for r in page_rows(doc[i]):
-            words = [compact(w[2]) for w in r]
-            if col is None:
-                if "数据资源" in words and any(w in ("软件", "计算机软件", "合计", "土地使用权", "软件及其他") for w in words):
+        for j in (i, i + 1):
+            if j >= len(doc) or (j > i and col is None):
+                break
+            stop = False
+            for r in page_rows(doc[j]):
+                words = [compact(w[2]) for w in r]
+                is_head = "数据资源" in words and any(
+                    w in ("软件", "计算机软件", "合计", "土地使用权", "软件及其他") for w in words)
+                if is_head:
+                    if col is not None:   # 下一张表（如本银行）开始了
+                        stop = True
+                        break
                     x0, x1, _ = r[words.index("数据资源")]
                     col = (x0 + x1) / 2
-                continue
-            label, cells, _ = parse_row(r, page_unit)
-            label = ENUM_RE.sub("", label, count=1)
-            if not cells:
-                if any(h in label for h in BOOK_HEADS):
-                    in_book_value = True    # 「四、账面价值」小标题，下面几行是期末、期初
-                elif any(h in label for h in OTHER_HEADS):
-                    in_book_value = False
-                continue
-            # 这一行是期末还是期初：看「期末/年末」「期初/年初」，或看日期「2024年12月31日」
-            when = None
-            m = re.search(r"(20\d{2})年(12月31日|1月1日)", label)
-            if m:
-                y, md = int(m.group(1)), m.group(2)
-                if (y == year and md == "12月31日"):
+                    continue
+                if col is None:
+                    continue
+                label, cells, _ = parse_row(r, page_unit)
+                label = ENUM_RE.sub("", label, count=1)
+                if not cells:
+                    if any(h in label for h in BOOK_HEADS):
+                        in_book_value = True    # 「四、账面价值」小标题，下面几行是期末、期初
+                    elif any(h in label for h in OTHER_HEADS):
+                        in_book_value = False
+                    continue
+                # 这一行是期末还是期初：看「期末/年末」「期初/年初」，或看日期「2024年12月31日」
+                when = None
+                m = re.search(r"(20\d{2})年(12月31日|1月1日)", label)
+                if m:
+                    y, md = int(m.group(1)), m.group(2)
+                    if y == year and md == "12月31日":
+                        when = "end"
+                    elif (y == year - 1 and md == "12月31日") or (y == year and md == "1月1日"):
+                        when = "begin"
+                elif re.search(r"期末|年末", label):
                     when = "end"
-                elif (y == year - 1 and md == "12月31日") or (y == year and md == "1月1日"):
+                elif re.search(r"期初|年初", label):
                     when = "begin"
-            elif re.search(r"期末|年末", label):
-                when = "end"
-            elif re.search(r"期初|年初", label):
-                when = "begin"
-            if when is None or not (in_book_value or "账面价值" in label):
-                continue
-            c = min(cells, key=lambda c: abs((c[0] + c[1]) / 2 - col))
-            if abs((c[0] + c[1]) / 2 - col) > 60:
-                continue
-            if when == "end" and end is None:
-                end = c[2]
-                raw.append(row_text(r))
-            elif when == "begin" and begin is None:
-                begin = c[2]
-                raw.append(row_text(r))
+                if when is None or not (in_book_value or "账面价值" in label):
+                    continue
+                c = min(cells, key=lambda c: abs((c[0] + c[1]) / 2 - col))
+                if abs((c[0] + c[1]) / 2 - col) > 60:
+                    continue
+                if when == "end" and end is None:
+                    end = c[2]
+                    raw.append(row_text(r))
+                elif when == "begin" and begin is None:
+                    begin = c[2]
+                    raw.append(row_text(r))
+            if stop or (end is not None and begin is not None):
+                break
         if end is not None or begin is not None:
             return [{"parent": "无形资产", "end": end, "begin": begin, "page": i + 1,
                      "raw": "；".join(raw), "source": "附注·无形资产明细", "unit": page_unit}]
+        i += 1
     return []
 
 
-TEXT_AMOUNT = re.compile(r"数据资源[^。；]{0,30}?(?:为|约|计|合计|共计)人民币?约?(\d[\d,]*(?:\.\d+)?)(亿元|百万元|万元|千元|元)"
-                         r"|数据资源约?人民币约?(\d[\d,]*(?:\.\d+)?)(亿元|百万元|万元|千元|元)")
+AMOUNT_TEXT = r"人民币约?(\d[\d,]*(?:\.\d+)?)(亿元|百万元|万元|千元|元)"
+BOOK_TEXT = re.compile(r"(?:账面价值|账面净值|账面净额|净值|净额)(?:为|约为|约|计)?" + AMOUNT_TEXT
+                       + r"(?:\((?:20\d{2})年12月31日:?" + AMOUNT_TEXT + r"\))?")
+PLAIN_TEXT = re.compile(r"数据资源[^。；]{0,30}?(?:为|约|计|合计|共计)" + AMOUNT_TEXT + r"|数据资源约?" + AMOUNT_TEXT)
 
 
 def from_text(texts, start):
-    """附注里没有明细表、只用文字写明数据资源账面价值的，如「无形资产中包含数据资源约人民币1,809万元」。"""
+    """附注里没有明细表、只用文字写明数据资源账面价值的，如「无形资产中包含数据资源约人民币1,809万元」。
+
+    同一句里有原值、累计摊销、净值时取净值（账面价值）；括号里注明的上年数作为期初。
+    """
     for i in range(start + 1, len(texts)):
         if "数据资源" not in texts[i]:
             continue
@@ -348,13 +375,24 @@ def from_text(texts, start):
                 continue
             if re.search(r"支出|费用|研发投入", sentence):
                 continue
-            m = TEXT_AMOUNT.search(sentence)
+            parent = "存货" if "存货" in sentence and "无形资产" not in sentence else "无形资产"
+            m = BOOK_TEXT.search(sentence[sentence.index("数据资源"):])
             if m:
-                value = float((m.group(1) or m.group(3)).replace(",", ""))
+                end = float(m.group(1).replace(",", ""))
+                begin = float(m.group(3).replace(",", "")) if m.group(3) else None
+                unit = m.group(2)
+                if m.group(4) and m.group(4) != unit:   # 上年数单位不同，统一换算到本年数的单位
+                    begin = begin * UNITS[m.group(4)] / UNITS[unit]
+            elif not re.search(r"原值|原价|成本", sentence):
+                m = PLAIN_TEXT.search(sentence)
+                if not m:
+                    continue
+                end, begin = float((m.group(1) or m.group(3)).replace(",", "")), None
                 unit = m.group(2) or m.group(4)
-                parent = "存货" if "存货" in sentence and "无形资产" not in sentence else "无形资产"
-                return [{"parent": parent, "end": value, "begin": None, "page": i + 1, "raw": sentence[:150],
-                         "source": "附注·文字说明", "unit": unit}]
+            else:
+                continue
+            return [{"parent": parent, "end": end, "begin": begin, "page": i + 1, "raw": sentence[:200],
+                     "source": "附注·文字说明", "unit": unit}]
     return []
 
 
