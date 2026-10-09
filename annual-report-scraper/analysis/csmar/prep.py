@@ -42,11 +42,14 @@ p["capta"] = (p.rdcap / p.TA_l)
 # 修正琼斯模型：行业-年度截面回归（≥10 家）
 p["tacc"] = (p.NI - p.CFO) / p.TA_l
 p["x0"] = 1 / p.TA_l
-p["x1"] = ((p.REV - p.REV_l) - (p.REC - p.REC_l).fillna(0)) / p.TA_l
+# 应收账款变动：上年数缺失（2021 年无 2020 年数据）时不估计，免得把变动当成 0；两年都没有应收账款的视为 0
+drec = (p.REC.fillna(0) - p.REC_l.fillna(0)).where(p.REC_l.notna() | p.REC.isna())
+drec = drec.where(~(p.year == 2021))
+p["x1"] = ((p.REV - p.REV_l) - drec) / p.TA_l
 p["x1j"] = (p.REV - p.REV_l) / p.TA_l
 p["x2"] = p.PPE / p.TA_l
 p["DA"] = np.nan
-for (ind, y), d in p.dropna(subset=["tacc", "x0", "x1j", "x2"]).groupby(["ind", "year"]):
+for (ind, y), d in p.dropna(subset=["tacc", "x0", "x1", "x1j", "x2"]).groupby(["ind", "year"]):
     d = d[(d.tacc.abs() < 2)]
     if len(d) < 10:
         continue

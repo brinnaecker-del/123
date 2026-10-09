@@ -17,7 +17,7 @@ d = pd.read_csv(sys.argv[1], dtype={"代码": str, "年度": str})
 d = d.rename(columns={"相对重要性%": "rel", "净利率影响pp": "imp", "测算入表额": "E"})
 FILL = {"稳健": "white", "下滑": "0.6", "亏损": "black"}
 fig, axes = plt.subplots(1, 2, figsize=(15.5 / 2.54, 7.4 / 2.54), sharey=True)
-for ax, (year, title) in zip(axes, [("2024", "(a) 2024年报：入表额＝期末余额"), ("2025", "(b) 2025年报：入表额＝当期新增")]):
+for ax, (year, title) in zip(axes, [("2024", "(a) 2024年报：入表额＝当期新增"), ("2025", "(b) 2025年报：入表额＝当期新增")]):
     g = d[(d.年度 == year) & (d.E > 0)]
     for _, r in g.iterrows():
         if r.案例企业 == r.案例企业 and r.案例企业:

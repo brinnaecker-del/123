@@ -60,6 +60,7 @@ for k in (2021, 2022, 2024, 2025):
 for y, xs in Y.items():
     m = pf.feols(f"{y} ~ T2021 + T2022 + T2024 + T2025 + {xs} | Stkcd + year", e.dropna(subset=[y]), vcov={"CRV1": "Stkcd"})
     t = m.tidy()
-    out["info"].setdefault("event", {})[y] = {k: [round(t.loc[k, "Estimate"], 4), round(t.loc[k, "Pr(>|t|)"], 3)] for k in ("T2021", "T2022", "T2024", "T2025")}
+    out["info"].setdefault("event", {})[y] = {k: [round(t.loc[k, "Estimate"], 4), round(t.loc[k, "Pr(>|t|)"], 3)]
+                                              for k in ("T2021", "T2022", "T2024", "T2025") if k in t.index}   # 可操纵应计从 2022 年起
 json.dump(out, open(sys.argv[2], "w"), ensure_ascii=False, indent=1)
 print(json.dumps(out, ensure_ascii=False, indent=1))
