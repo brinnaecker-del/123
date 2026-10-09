@@ -9,7 +9,7 @@
   · 原文摘录：全文中提到「数据资源」「数据资产」的段落及页码，写论文时引用；
   · 诊断：没提取到金额的年报，列出其中的报表标题行和含「数据资源」的原文行，便于查明原因。
 金额优先取合并资产负债表「其中：数据资源」行；报表正文没有这一行的（银行、证券公司常见），
-改取附注无形资产明细表里「数据资源」一列的账面价值，并在「来源」一栏注明。
+依次改取附注无形资产明细表里「数据资源」一列的账面价值、附注文字里写明的数据资源账面价值，并在「来源」一栏注明。
 自动提取难免有个别排版特殊的年报识别不准，请对照 PDF 抽查；页码和原文都保留在表里。
 需要先安装：pip install pymupdf openpyxl
 """
@@ -45,7 +45,8 @@ DASH_RE = re.compile(r"^[-—–]+$")
 # 附注编号，如「七、10」「七·83」「七、26.(2)」「七-26」「(五)」「五、(十二)」「附注七」「注释5」「本节七、26」
 NOTE_RE = re.compile(r"^(附注.*|本节.*|注释?\d+"
                      r"|\(?[一二三四五六七八九十]+\)?([、.．·・\-—]?\(?[一二三四五六七八九十\d]+\)?)*[、.．·・,，\-—]?)$")
-ENUM_RE = re.compile(r"^\(?(\d{1,2}|[一二三四五六七八九十]{1,3})\)?[、.．]?")   # 标题前的编号「1、」「(一)」
+# 标题前的编号「1、」「1.」「(1)」「(一)」「一、」；数字后必须有标点或括号，免得把「2025年」的「20」当成编号
+ENUM_RE = re.compile(r"^(\(\d{1,2}\)|\d{1,2}[、.．](?!\d)|\(?[一二三四五六七八九十]{1,3}\)?[、.．]?)")
 BS_WORDS = ("货币资金", "现金及存放中央银行款项", "流动资产", "结算备付金", "存放同业", "资产总计")
 END_LABELS = ("资产总计", "资产合计", "流动负债", "负债:", "负债和", "负债及")
 
@@ -103,8 +104,11 @@ def parse_row(row, unit):
     以元为单位时，不带逗号和小数点的整数（如「83」）多半是附注编号或页码，不算金额。
     """
     label, cells, trailing = [], [], []
+    cells_done = False
     for x0, x1, w in row:
-        if DASH_RE.match(w):
+        if cells_done:
+            trailing.append(w)
+        elif DASH_RE.match(w):
             cells.append((x0, x1, None))
         elif NUM_RE.match(w):
             digits = w.strip("()-")
@@ -116,11 +120,13 @@ def parse_row(row, unit):
             continue
         elif cells:
             trailing.append(w)
+            cells_done = True
         else:
             label.append(w)
-    # 金额后面还有文字（如「数据资源 15 年 直线法」）的不是报表行；排版错位带进来的单个字不算
+    # 金额后面再出现的文字：资产、负债左右并排时是右半边的负债项目，只保留左半边的金额；
+    # 「数据资源 15 年 直线法」这类摊销年限表不是报表行
     tail = "".join(trailing)
-    extra_text = bool(re.search(r"[年月法%]", tail)) or len(re.findall(r"[\u4e00-\u9fff]", tail)) >= 2
+    extra_text = bool(re.search(r"[年月法%]", tail))
     return compact("".join(label)), cells, extra_text
 
 
@@ -186,22 +192,37 @@ def assign(cells, cols, wide):
 def find_balance_sheet(doc, texts):
     """返回 (合并资产负债表起始页, 是否并排格式, 审计报告页)。从审计报告之后找，避开目录和管理层讨论。"""
     audit = next((i for i, t in enumerate(texts) if "我们审计了" in t), 0)
+
+    def has_bs(j):  # 这一页或下一页有资产类项目（标题常落在上一页底部，表格从下一页开始）
+        return any(0 <= x < len(texts) and any(k in texts[x] for k in BS_WORDS) for x in (j, j + 1))
+
+    def first_title(j):
+        for r in page_rows(doc[j]):
+            kind = title_kind(row_text(r))
+            if kind:
+                return kind
+        return None
+
     single = loose = None
     for i in range(audit, len(texts)):
-        t = texts[i]
-        if "资产负债表" not in t or not any(k in t for k in BS_WORDS):
+        if "资产负债表" not in texts[i] or not has_bs(i):
             continue
         for r in page_rows(doc[i]):
             kind = title_kind(row_text(r))
             if kind in ("wide", "narrow"):
+                # 只有标题、没有表格的页（如报表目录「合并及母公司资产负债表」），以下一页的标题为准
+                if not any(k in texts[i] for k in BS_WORDS) and i + 1 < len(texts):
+                    nxt = first_title(i + 1)
+                    if nxt in ("wide", "narrow"):
+                        return i + 1, nxt == "wide", audit
                 return i, kind == "wide", audit
             if kind == "parent" and single is None:
                 single = i            # 没有子公司的单体报表，标题就是「资产负债表」
-        if loose is None:
+        if loose is None and any(k in texts[i] for k in BS_WORDS):
             loose = i
     if single is not None:
         for j in range(max(audit, single - 4), single):
-            if "合并资产负债表" in texts[j] and any(k in texts[j] for k in BS_WORDS):
+            if "合并资产负债表" in texts[j] and has_bs(j):
                 return j, False, audit
         return single, False, audit
     return loose, False, audit
@@ -235,7 +256,7 @@ def from_balance_sheet(doc, start, wide, unit):
     for k, (i, r, label, cells, extra) in enumerate(body):
         if not label:
             continue
-        if ("数据资源" in label or "数据资产" in label) and len(re.findall(r"[\u4e00-\u9fff]", label)) <= 8:
+        if re.match(r"^(其中:?)?数据资[源产]([(（].*)?$", clean_label(label)):
             if extra:
                 continue
             raw = row_text(r)
@@ -257,10 +278,14 @@ def from_balance_sheet(doc, start, wide, unit):
     return lines
 
 
-def from_notes(doc, texts, start, unit):
+BOOK_HEADS = ("账面价值", "账面净值", "账面净额", "净值", "净额")
+OTHER_HEADS = ("原值", "原价", "成本", "累计摊销", "减值准备")
+
+
+def from_notes(doc, texts, start, unit, year):
     """报表正文没有数据资源行时，到附注里找无形资产明细表中「数据资源」一列的期末、期初账面价值。"""
     for i in range(start + 1, len(doc)):
-        if "数据资源" not in texts[i] or "账面价值" not in texts[i]:
+        if "数据资源" not in texts[i] or not any(h in texts[i] for h in BOOK_HEADS):
             continue
         col, end, begin, raw, in_book_value = None, None, None, [], False
         page_unit = unit_near(texts, i) or unit
@@ -273,20 +298,35 @@ def from_notes(doc, texts, start, unit):
                 continue
             label, cells, _ = parse_row(r, page_unit)
             label = ENUM_RE.sub("", label, count=1)
-            if "账面价值" in label and not cells:
-                in_book_value = True   # 「四、账面价值」小标题，下面几行是「期末」「期初」
+            if not cells:
+                if any(h in label for h in BOOK_HEADS):
+                    in_book_value = True    # 「四、账面价值」小标题，下面几行是期末、期初
+                elif any(h in label for h in OTHER_HEADS):
+                    in_book_value = False
                 continue
-            if not cells or not ("账面价值" in label or (in_book_value and re.match(r"(期末|年末|期初|年初)", label))):
+            # 这一行是期末还是期初：看「期末/年末」「期初/年初」，或看日期「2024年12月31日」
+            when = None
+            m = re.search(r"(20\d{2})年(12月31日|1月1日)", label)
+            if m:
+                y, md = int(m.group(1)), m.group(2)
+                if (y == year and md == "12月31日"):
+                    when = "end"
+                elif (y == year - 1 and md == "12月31日") or (y == year and md == "1月1日"):
+                    when = "begin"
+            elif re.search(r"期末|年末", label):
+                when = "end"
+            elif re.search(r"期初|年初", label):
+                when = "begin"
+            if when is None or not (in_book_value or "账面价值" in label):
                 continue
             c = min(cells, key=lambda c: abs((c[0] + c[1]) / 2 - col))
-            x, v = (c[0] + c[1]) / 2, c[2]
-            if abs(x - col) > 60:
+            if abs((c[0] + c[1]) / 2 - col) > 60:
                 continue
-            if re.search(r"(期末|年末)", label) and end is None:
-                end = v
+            if when == "end" and end is None:
+                end = c[2]
                 raw.append(row_text(r))
-            elif re.search(r"(期初|年初)", label) and begin is None:
-                begin = v
+            elif when == "begin" and begin is None:
+                begin = c[2]
                 raw.append(row_text(r))
         if end is not None or begin is not None:
             return [{"parent": "无形资产", "end": end, "begin": begin, "page": i + 1,
@@ -294,7 +334,31 @@ def from_notes(doc, texts, start, unit):
     return []
 
 
-def extract(pdf_path):
+TEXT_AMOUNT = re.compile(r"数据资源[^。；]{0,30}?(?:为|约|计|合计|共计)人民币?约?(\d[\d,]*(?:\.\d+)?)(亿元|百万元|万元|千元|元)"
+                         r"|数据资源约?人民币约?(\d[\d,]*(?:\.\d+)?)(亿元|百万元|万元|千元|元)")
+
+
+def from_text(texts, start):
+    """附注里没有明细表、只用文字写明数据资源账面价值的，如「无形资产中包含数据资源约人民币1,809万元」。"""
+    for i in range(start + 1, len(texts)):
+        if "数据资源" not in texts[i]:
+            continue
+        for sentence in re.split(r"[。；]", texts[i]):
+            if "数据资源" not in sentence or not re.search(r"账面价值|无形资产中包含|确认为无形资产|确认为存货", sentence):
+                continue
+            if re.search(r"支出|费用|研发投入", sentence):
+                continue
+            m = TEXT_AMOUNT.search(sentence)
+            if m:
+                value = float((m.group(1) or m.group(3)).replace(",", ""))
+                unit = m.group(2) or m.group(4)
+                parent = "存货" if "存货" in sentence and "无形资产" not in sentence else "无形资产"
+                return [{"parent": parent, "end": value, "begin": None, "page": i + 1, "raw": sentence[:150],
+                         "source": "附注·文字说明", "unit": unit}]
+    return []
+
+
+def extract(pdf_path, year):
     doc = pymupdf.open(pdf_path)
     texts = [compact(p.get_text()) for p in doc]
     start, wide, audit = find_balance_sheet(doc, texts)
@@ -306,12 +370,18 @@ def extract(pdf_path):
     else:
         result["bs_page"] = start + 1
         unit = unit_near(texts, start)
+        if not unit:
+            for j in range(start, audit - 1, -1):
+                m = UNIT_RE.search(texts[j]) or UNIT_RE2.search(texts[j])
+                if m:
+                    unit = m.group(1)
+                    break
         result["unit"] = unit or "元"
         if not unit:
             result["status"] = "未注明单位，按元处理"
         result["lines"] = from_balance_sheet(doc, start, wide, result["unit"])
         if not result["lines"]:
-            result["lines"] = from_notes(doc, texts, start, result["unit"])
+            result["lines"] = from_notes(doc, texts, start, result["unit"], year) or from_text(texts, start)
 
     if not any(ln["end"] is not None or ln["begin"] is not None for ln in result["lines"]):
         # 诊断信息：报表标题行、含「数据资源」的原文行
@@ -371,7 +441,7 @@ def main():
         code = parts[0] if parts and re.fullmatch(r"\d{6}", parts[0]) else ""
         name = parts[1] if len(parts) > 1 else ""
         try:
-            r = extract(pdf)
+            r = extract(pdf, int(year))
         except Exception as e:  # 个别 PDF 损坏或加密时不影响其他文件
             print(f"[{n}/{len(pdfs)}] {pdf.name}：出错 {e}")
             summary.append([year, code, name] + [None] * 5 + [""] + [None] * 4 + ["", "", "", "", f"出错：{e}", pdf.name])
