@@ -39,10 +39,12 @@ QUOTE_WORDS = ["数据资源", "数据资产"]                      # 摘录含�
 UNITS = {"元": 1, "千元": 1e3, "万元": 1e4, "百万元": 1e6, "亿元": 1e8}
 
 UNIT_RE = re.compile(r"单位(?:均为|为)?:?(?:人民币)?(百万元|千元|万元|亿元|元)")
+UNIT_RE2 = re.compile(r"人民币(百万元|千元|万元|亿元)")   # 「以人民币千元列示」之类没有「单位」二字的写法
 NUM_RE = re.compile(r"^\(?-?\d[\d,]*(?:\.\d+)?\)?$")
 DASH_RE = re.compile(r"^[-—–]+$")
-# 附注编号，如「七、10」「七·83」「(五)」「五、(十二)」「附注七」「注释5」
-NOTE_RE = re.compile(r"^(附注.*|注释?\d+|\(?[一二三四五六七八九十]+\)?[、.．·・]?(\(?[一二三四五六七八九十\d]+\)?)*[,，]?)$")
+# 附注编号，如「七、10」「七·83」「七、26.(2)」「七-26」「(五)」「五、(十二)」「附注七」「注释5」「本节七、26」
+NOTE_RE = re.compile(r"^(附注.*|本节.*|注释?\d+"
+                     r"|\(?[一二三四五六七八九十]+\)?([、.．·・\-—]?\(?[一二三四五六七八九十\d]+\)?)*[、.．·・,，\-—]?)$")
 ENUM_RE = re.compile(r"^\(?(\d{1,2}|[一二三四五六七八九十]{1,3})\)?[、.．]?")   # 标题前的编号「1、」「(一)」
 BS_WORDS = ("货币资金", "现金及存放中央银行款项", "流动资产", "结算备付金", "存放同业", "资产总计")
 END_LABELS = ("资产总计", "资产合计", "流动负债", "负债:", "负债和", "负债及")
@@ -60,14 +62,14 @@ def compact(s):
 def title_kind(row_text):
     """判断一行是不是报表标题：wide=合并与本公司并排、narrow=合并单列、parent=母公司或单体、other=利润表等。"""
     c = compact(row_text)
-    if len(c) > 40:
+    if len(c) > 80:
         return None
     t = ENUM_RE.sub("", c, count=1)
     if re.match(r"合并及(母公司|公司|银行|本行)资产负债表|合并资产负债表(及|和|与)(母公司|公司|银行|本行)?资产负债表", t):
         return "wide"
-    if re.match(r"合并资产负债表(?![、，,。及和与日中项表])", t):
+    if re.match(r"合并资产负债表(?![、，,。及和与日中项表的时内期])", t):
         return "narrow"
-    if re.match(r"(母公司|公司|银行|本行)资产负债表(?![日中])|资产负债表(?=$|\(续|-|20)", t):
+    if re.match(r"(母公司|公司|银行|本行)资产负债表(?![日中的时内])|资产负债表(?=$|\(续|-|20|编制|单位|会企)", t):
         return "parent"
     if re.match(r"(合并)?(及(母公司|公司|银行|本行))?利润表|(母公司|公司|银行|本行)利润表", t):
         return "other"
@@ -100,7 +102,7 @@ def parse_row(row, unit):
 
     以元为单位时，不带逗号和小数点的整数（如「83」）多半是附注编号或页码，不算金额。
     """
-    label, cells, extra_text = [], [], False
+    label, cells, trailing = [], [], []
     for x0, x1, w in row:
         if DASH_RE.match(w):
             cells.append((x0, x1, None))
@@ -113,9 +115,12 @@ def parse_row(row, unit):
         elif NOTE_RE.match(w):
             continue
         elif cells:
-            extra_text = True          # 金额后面还有文字：不是报表行（如「数据资源 15 年 直线法」）
+            trailing.append(w)
         else:
             label.append(w)
+    # 金额后面还有文字（如「数据资源 15 年 直线法」）的不是报表行；排版错位带进来的单个字不算
+    tail = "".join(trailing)
+    extra_text = bool(re.search(r"[年月法%]", tail)) or len(re.findall(r"[\u4e00-\u9fff]", tail)) >= 2
     return compact("".join(label)), cells, extra_text
 
 
@@ -194,15 +199,21 @@ def find_balance_sheet(doc, texts):
                 single = i            # 没有子公司的单体报表，标题就是「资产负债表」
         if loose is None:
             loose = i
-    return (single if single is not None else loose), False, audit
+    if single is not None:
+        for j in range(max(audit, single - 4), single):
+            if "合并资产负债表" in texts[j] and any(k in texts[j] for k in BS_WORDS):
+                return j, False, audit
+        return single, False, audit
+    return loose, False, audit
 
 
 def unit_near(texts, i):
-    for j in (i, i - 1, i + 1):
-        if 0 <= j < len(texts):
-            m = UNIT_RE.search(texts[j])
-            if m:
-                return m.group(1)
+    for regex in (UNIT_RE, UNIT_RE2):
+        for j in (i, i - 1, i + 1, i - 2):
+            if 0 <= j < len(texts):
+                m = regex.search(texts[j])
+                if m:
+                    return m.group(1)
     return None
 
 
@@ -224,7 +235,7 @@ def from_balance_sheet(doc, start, wide, unit):
     for k, (i, r, label, cells, extra) in enumerate(body):
         if not label:
             continue
-        if ("数据资源" in label or "数据资产" in label) and len(label) <= 12:
+        if ("数据资源" in label or "数据资产" in label) and len(re.findall(r"[\u4e00-\u9fff]", label)) <= 8:
             if extra:
                 continue
             raw = row_text(r)
@@ -304,15 +315,17 @@ def extract(pdf_path):
 
     if not any(ln["end"] is not None or ln["begin"] is not None for ln in result["lines"]):
         # 诊断信息：报表标题行、含「数据资源」的原文行
+        titles, mentions = [], []
         for i in range(audit, len(doc)):
             if "资产负债表" not in texts[i] and "数据资源" not in texts[i]:
                 continue
             for r in page_rows(doc[i]):
                 c = compact(row_text(r))
-                if ("资产负债表" in c and len(c) <= 40) or ("数据资源" in c and len(c) <= 80):
-                    result["diag"].append((i + 1, row_text(r)[:120]))
-            if len(result["diag"]) >= 25:
-                break
+                if title_kind(row_text(r)) in ("wide", "narrow", "parent") and len(titles) < 8:
+                    titles.append((i + 1, row_text(r)[:120]))
+                elif "数据资源" in c and len(c) <= 80 and len(mentions) < 20:
+                    mentions.append((i + 1, row_text(r)[:120]))
+        result["diag"] = sorted(titles + mentions)
 
     for i, page in enumerate(doc):
         for block in page.get_text("blocks"):
