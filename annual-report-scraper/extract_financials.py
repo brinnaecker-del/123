@@ -5,8 +5,10 @@
 读取 REPORT_DIR 下 2024年报、2025年报 两个文件夹里的全部 PDF，结果存为 REPORT_DIR 里的「财务数据提取结果.xlsx」：
   · 财务数据：每份年报一行——合并资产负债表的资产总计（期末、期初），合并利润表的营业（总）收入、净利润、
               归属于母公司股东的净利润、研发费用（本期、上期），管理层讨论中的研发投入合计与资本化金额，均已折算成元；
+              另列第二节「主要会计数据」表里的营业收入、归母净利润、总资产（本年数），用来核对报表取数；
   · 明细行：每个数取自哪一页、原文是什么，供核对；
-  · 未取到：没取到的项目及原因线索。
+  · 未取到：没取到的项目、与主要会计数据对不上的项目；
+  · 诊断：上述年报的报表原文行（带横向位置），用来查明原因。
 需要先安装：pip install pymupdf openpyxl
 """
 
@@ -30,7 +32,7 @@ FOLDERS = ["2024年报", "2025年报"]       # 要处理的子文件夹
 
 UNITS = {"元": 1, "千元": 1e3, "万元": 1e4, "百万元": 1e6, "亿元": 1e8}
 UNIT_RE = re.compile(r"单位(?:均为|为)?:?(?:人民币)?(百万元|千元|万元|亿元|元)")
-UNIT_RE2 = re.compile(r"人民币(百万元|千元|万元|亿元|元)(?![\d,])")
+UNIT_RE2 = re.compile(r"人民币(百万元|千元|万元|亿元)")   # 「以人民币千元列示」之类没有「单位」二字的写法
 NUM_RE = re.compile(r"^\(?-?\d[\d,]*(?:\.\d+)?\)?$")
 DASH_RE = re.compile(r"^[-—–]+$")
 NOTE_RE = re.compile(r"^(附注.*|本节.*|注释?\d+"
@@ -41,8 +43,8 @@ IS_WORDS = ("营业收入", "营业总收入", "净利润")
 
 # 利润表要取的项目：名称 -> 项目名（已去掉编号、括号说明）的匹配规则
 IS_ITEMS = {
-    "营业总收入": r"^营业总收入$",
-    "营业收入": r"^营业收入$",
+    "营业总收入": r"^营业总收入(合计)?$",
+    "营业收入": r"^营业(净)?收入(合计|总计|总额)?$",
     "净利润": r"^净利润$",
     # 「归属于母公司股东的净利润」「归属于本行股东的净利润」；也有先写一行「归属于：」、下一行写「本行股东」的
     "归母净利润": r"^(归属于(?!少数)(?!.*(持续经营|终止经营|非经常)).{0,16}净利润"
@@ -84,7 +86,8 @@ def parse_row(row, unit):
     """一行 -> (项目名称, [(左边界 x, 右边界 x, 金额或 None)…])。以元为单位时不带逗号和小数点的整数视为附注编号。"""
     label, cells, done = [], [], False
     for x0, x1, w in row:
-        if done:
+        w = w.strip()
+        if done or not w:        # 不间断空格等空白字符单独成词的，跳过
             continue
         if DASH_RE.match(w):
             cells.append((x0, x1, None))
@@ -122,24 +125,27 @@ ALIGNS = (lambda c: c[1], lambda c: c[0], lambda c: (c[0] + c[1]) / 2)   # 右�
 def columns(cell_rows, wide):
     """找出本期（期末）、上期（期初）两列的位置；金额可能右对齐、左对齐或居中，选最能对齐的一种。"""
     def note_column(g):
-        return all(v is not None and float(v).is_integer() and abs(v) < 100 for _, v in g)
+        return all(v is not None and float(v).is_integer() and abs(v) < 100 for _, v, _ in g)
 
     best = None
     for key in ALIGNS:
-        pts = sorted(((key(c), c[2]) for cells in cell_rows if len(cells) >= 2 for c in cells), key=lambda p: p[0])
+        pts = sorted(((key(c), c[2], n) for n, cells in enumerate(cell_rows) if len(cells) >= 2 for c in cells),
+                     key=lambda p: p[0])
         groups = []
-        for x, v in pts:
+        for x, v, n in pts:
             if groups and x - groups[-1][-1][0] <= 25:
-                groups[-1].append((x, v))
+                groups[-1].append((x, v, n))
             else:
-                groups.append([(x, v)])
+                groups.append([(x, v, n)])
+        # 同一行的两个数落进了同一组：相邻两列被连成了一片，说明不是这种对齐方式
+        mixed = sum(len(g) - len({n for _, _, n in g}) for g in groups)
         good = [g for g in groups if len(g) >= 3 and not note_column(g)]
         if len(good) < 2:
             continue
         chosen = good[:2] if wide or len(good) >= 4 else good[-2:]
-        score = sum(len(g) for g in chosen)
+        score = (-mixed, sum(len(g) for g in chosen))
         if best is None or score > best[0]:
-            best = (score, key, [sorted(x for x, _ in g)[len(g) // 2] for g in chosen])
+            best = (score, key, [sorted(x for x, _, _ in g)[len(g) // 2] for g in chosen])
     return None if best is None else (best[1], best[2])
 
 
@@ -265,40 +271,49 @@ def read_statement(doc, start, row0, kind, name, unit, wanted, stop):
             if key not in found and cells and re.match(pattern, item):
                 cur, prev = assign(cells, cols, wide)
                 found[key] = (cur, prev, i + 1, row_text(r))
+    found["_rows"] = [(i, r) for i, r, _, _ in body]
     return found
 
 
 RD_TOTAL = r"^(本期|本年)?研发投入(金额|合计|总额|总计)(合计)?$"
 RD_CAP = r"^(本期|本年)?(研发投入资本化的?金额|资本化研发投入|研发投入资本化金额)$"
+# 第二节「主要会计数据」表：只取本年数，用来核对从报表里取的数
+KEY_ITEMS = {
+    "营业收入": r"^营业(总)?收入$",
+    "归母净利润": r"^归属于(上市公司|本行|母公司|本公司|本集团)?(普通股)?(股东|所有者)的净利润$",
+    "总资产": r"^(总资产|资产总额|资产总计)$",
+}
+
+
+def scan_rows(doc, texts, i):
+    """管理层讨论等正文表格：逐行给出 (项目名, (第一个数, 页码, 原文, 单位))。单位看项目名括号或表格上方的说明。"""
+    unit = unit_near(texts, i) or "元"
+    for r in page_rows(doc[i]):
+        c = compact(row_text(r))
+        m = UNIT_RE.search(c) or UNIT_RE2.search(c)
+        if m:
+            unit = m.group(1)        # 表格上方的「单位：元」
+        m = re.search(r"\((百万元|千元|万元|亿元|元)\)", c)
+        row_unit = m.group(1) if m else unit   # 项目名里写的「研发投入金额(元)」
+        label, cells = parse_row(r, row_unit)
+        name = re.sub(r"\([^)]*\)", "", label)
+        nums = [x for x in cells if x[2] is not None]
+        if nums and "占" not in name and "比" not in name:
+            yield name, (nums[0][2], i + 1, row_text(r), row_unit)
 
 
 def read_rd(doc, texts, audit):
     """管理层讨论里的研发投入表：研发投入合计、资本化金额（本年）。返回 ((数, 页码, 原文, 单位) 或 None, 同上)。"""
-    def scan(i):
-        unit = unit_near(texts, i) or "元"
-        for r in page_rows(doc[i]):
-            c = compact(row_text(r))
-            m = UNIT_RE.search(c) or UNIT_RE2.search(c)
-            if m:
-                unit = m.group(1)        # 表格上方的「单位：元」
-            m = re.search(r"\((百万元|千元|万元|亿元|元)\)", c)
-            row_unit = m.group(1) if m else unit   # 项目名里写的「研发投入金额(元)」
-            label, cells = parse_row(r, row_unit)
-            name = re.sub(r"\([^)]*\)", "", label)
-            nums = [x for x in cells if x[2] is not None]
-            if nums and "占" not in name and "比" not in name:
-                yield name, (nums[0][2], i + 1, row_text(r), row_unit)
-
     for i in range(0, audit or len(texts)):
         if "研发投入" not in texts[i]:
             continue
-        total = next((v for name, v in scan(i) if re.match(RD_TOTAL, name)), None)
+        total = next((v for name, v in scan_rows(doc, texts, i) if re.match(RD_TOTAL, name)), None)
         if not total:
             continue
         cap = None
         for j in (i, i + 1):        # 资本化金额可能在下一页
             if j < len(texts) and "资本化" in texts[j]:
-                cap = next((v for name, v in scan(j) if re.match(RD_CAP, name)), None)
+                cap = next((v for name, v in scan_rows(doc, texts, j) if re.match(RD_CAP, name)), None)
                 if cap:
                     break
         if cap and cap[0] * UNITS[cap[3]] > total[0] * UNITS[total[3]]:
@@ -307,20 +322,56 @@ def read_rd(doc, texts, audit):
     return None, None
 
 
+def read_key_data(doc, texts, audit):
+    """第二节「主要会计数据」表里的营业收入、归母净利润、总资产（本年数）。"""
+    end = audit or len(texts)
+    start = next((i for i in range(end) if "主要会计数据" in texts[i] and "净利润" in texts[i]), None)
+    found = {}
+    if start is None:
+        return found
+    for i in range(start, min(start + 4, end)):
+        for name, v in scan_rows(doc, texts, i):
+            for key, pattern in KEY_ITEMS.items():
+                if key not in found and re.match(pattern, name):
+                    found[key] = v
+    return found
+
+
+def fmt_row(row):
+    return " ".join(f"{w[2]}({w[0]:.0f}-{w[1]:.0f})" for w in row)
+
+
+def title_candidates(doc, texts, audit, name):
+    """没找到报表时，列出审计报告之后含报表名称的短行，便于查明原因。"""
+    out = []
+    for i in range(audit, len(texts)):
+        if name not in texts[i]:
+            continue
+        for r in page_rows(doc[i]):
+            if name in compact(row_text(r)) and len(compact(row_text(r))) <= 80:
+                out.append((i, r))
+                if len(out) >= 15:
+                    return out
+    return out
+
+
 def extract(pdf_path):
     doc = pymupdf.open(pdf_path)
     texts = [compact(p.get_text()) for p in doc]
     audit = next((i for i, t in enumerate(texts) if "我们审计了" in t), 0)
-    out = {"items": {}, "notes": [], "bs_page": "", "is_page": "", "bs_unit": "", "is_unit": ""}
+    out = {"items": {}, "notes": [], "bs_page": "", "is_page": "", "bs_unit": "", "is_unit": "",
+           "key": {}, "diag": []}
 
     bs, row0, kind = find_statement(doc, texts, "资产负债表", BS_WORDS, audit)
     if bs is None:
         out["notes"].append("没找到合并资产负债表")
+        out["diag"] += [("资产负债表标题候选", i, r) for i, r in title_candidates(doc, texts, audit, "资产负债表")]
     else:
         unit = unit_near(texts, bs, audit) or "元"
         out["bs_page"], out["bs_unit"] = bs + 1, unit
         got = read_statement(doc, bs, row0, kind, "资产负债表", unit,
                              {"总资产": r"^资产(总计|合计)$"}, r"^资产(总计|合计)$")
+        bs_rows = got.pop("_rows")
         if "总资产" in got:
             out["items"]["总资产"] = got["总资产"] + (unit,)
         else:
@@ -331,10 +382,12 @@ def extract(pdf_path):
     is_, row0, kind = find_statement(doc, texts, "利润表", IS_WORDS, bs if bs is not None else audit)
     if is_ is None:
         out["notes"].append("没找到合并利润表")
+        out["diag"] += [("利润表标题候选", i, r) for i, r in title_candidates(doc, texts, audit, "利润表")]
     else:
         unit = unit_near(texts, is_, audit) or "元"
         out["is_page"], out["is_unit"] = is_ + 1, unit
         got = read_statement(doc, is_, row0, kind, "利润表", unit, IS_ITEMS, r"^(稀释每股收益|基本每股收益|每股收益)")
+        is_rows = got.pop("_rows")
         if "营业总收入" not in got and "营业收入" in got:
             got["营业总收入"] = got["营业收入"]
         if kind == "parent" and "归母净利润" not in got and "净利润" in got:
@@ -352,6 +405,27 @@ def extract(pdf_path):
         out["items"]["研发投入合计"] = (total[0], None, total[1], total[2], total[3])
     if cap:
         out["items"]["研发投入资本化金额"] = (cap[0], None, cap[1], cap[2], cap[3])
+
+    # 和「主要会计数据」表核对本年数
+    out["key"] = read_key_data(doc, texts, audit)
+    bad_bs = bad_is = False
+    for k, item in (("总资产", "总资产"), ("营业收入", "营业总收入"), ("归母净利润", "归母净利润")):
+        if k not in out["key"] or item not in out["items"]:
+            continue
+        a = yuan(out["key"][k][0], out["key"][k][3])
+        b = yuan(out["items"][item][0], out["items"][item][4])
+        if b is None or abs(a - b) > max(abs(a) * 0.002, 1000):
+            if k == "营业收入" and "营业收入" in out["items"] and \
+                    abs(a - (yuan(out["items"]["营业收入"][0], out["items"]["营业收入"][4]) or 0)) <= max(abs(a) * 0.002, 1000):
+                continue     # 主要会计数据写的是营业收入，不是营业总收入
+            out["notes"].append(f"{item}与主要会计数据不一致")
+            bad_bs |= k == "总资产"
+            bad_is |= k != "总资产"
+    if bs is not None and ("总资产" not in out["items"] or bad_bs):
+        out["diag"] += [("资产负债表", i, r) for i, r in bs_rows[:80]]
+    if is_ is not None and (any(f"没找到{k}" in n for n in out["notes"] for k in ("营业总收入", "净利润", "归母净利润"))
+                            or bad_is):
+        out["diag"] += [("利润表", i, r) for i, r in is_rows[:90]]
     return out
 
 
@@ -385,16 +459,17 @@ def main():
         sys.exit(f"在 {root} 下的 {'、'.join(FOLDERS)} 里没找到 PDF，请检查 REPORT_DIR 是否正确")
     print(f"共 {len(pdfs)} 份年报，开始提取财务数据……\n")
 
-    rows, detail, misses = [], [], []
+    rows, detail, misses, diags = [], [], [], []
     for n, (year, pdf) in enumerate(pdfs, 1):
         parts = pdf.stem.split("_")
         code = parts[0] if re.fullmatch(r"\d{6}", parts[0]) else ""
-        name = parts[1] if len(parts) > 1 else ""
+        name = next((x for x in parts[1:] if x), "")     # 「688066__ST航图_…」：*ST 的星号在文件名里成了下划线
         try:
             r = extract(pdf)
         except Exception as e:
             print(f"[{n}/{len(pdfs)}] {pdf.name}：出错 {e}")
             misses.append([year, code, name, f"出错：{e}"])
+            rows.append([year, code, name] + [None] * 15 + ["", "", "", "", f"出错：{e}", pdf.name])
             continue
         it = r["items"]
         row = [year, code, name]
@@ -404,18 +479,25 @@ def main():
             row += [yuan(cur, unit), yuan(prev, unit)]
         for key in ("研发投入合计", "研发投入资本化金额"):
             row.append(yuan(it[key][0], it[key][4]) if key in it else None)
+        for key in KEY_ITEMS:
+            row.append(yuan(r["key"][key][0], r["key"][key][3]) if key in r["key"] else None)
         row += [r["bs_page"], r["bs_unit"], r["is_page"], r["is_unit"], "；".join(r["notes"]), pdf.name]
         rows.append(row)
         for key, (cur, prev, page, raw, unit) in it.items():
             detail.append([year, code, name, key, cur, prev, unit, yuan(cur, unit), yuan(prev, unit), page, raw])
+        for key, (v, page, raw, unit) in r["key"].items():
+            detail.append([year, code, name, f"主要会计数据·{key}", v, None, unit, yuan(v, unit), None, page, raw])
         for note in r["notes"]:
             misses.append([year, code, name, note])
+        for what, i, rr in r["diag"]:
+            diags.append([year, code, name, what, i + 1, fmt_row(rr)])
         print(f"[{n}/{len(pdfs)}] {code} {name} {year}：取到 {len(it)} 项 {'；'.join(r['notes'])}")
 
     header = ["报告年度", "股票代码", "简称"]
     for key, a, b in FIELDS:
         header += [f"{key}_{a}(元)", f"{key}_{b}(元)"]
-    header += ["研发投入合计(元)", "研发投入资本化金额(元)", "资产负债表页码", "资产负债表单位", "利润表页码", "利润表单位", "提取情况", "文件"]
+    header += ["研发投入合计(元)", "研发投入资本化金额(元)"] + [f"主要会计数据_{k}(元)" for k in KEY_ITEMS]
+    header += ["资产负债表页码", "资产负债表单位", "利润表页码", "利润表单位", "提取情况", "文件"]
     out = root / "财务数据提取结果.xlsx"
     try:
         write_book(out, {
@@ -423,12 +505,14 @@ def main():
             "明细行": (["报告年度", "股票代码", "简称", "项目", "本期/期末(原单位)", "上期/期初(原单位)", "单位",
                        "本期/期末(元)", "上期/期初(元)", "页码", "原文"], detail),
             "未取到": (["报告年度", "股票代码", "简称", "情况"], misses),
+            "诊断": (["报告年度", "股票代码", "简称", "哪张表", "页码", "原文行（括号里是横向位置）"], diags),
         })
     except PermissionError:
         sys.exit(f"写不进 {out}：请先关掉 Excel 里打开的这个文件，再重新运行")
-    full = sum(1 for r in rows if all(r[i] is not None for i in (3, 5, 7)))
+    full = sum(1 for r in rows if all(r[i] is not None for i in (3, 5, 7, 9)))
     print("\n" + "=" * 50)
-    print(f"处理 {len(pdfs)} 份年报，其中 {full} 份总资产、营业收入、净利润三项齐全")
+    print(f"处理 {len(pdfs)} 份年报，其中 {full} 份总资产、营业收入、净利润、归母净利润四项齐全")
+    print(f"有 {len({(m[0], m[1]) for m in misses})} 份年报有缺项或与主要会计数据对不上，见「未取到」页")
     print(f"结果：{out}")
 
 
