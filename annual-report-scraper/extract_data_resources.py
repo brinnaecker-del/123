@@ -297,6 +297,7 @@ def from_notes(doc, texts, start, unit, year):
             i += 1
             continue
         col, end, begin, raw, in_book_value = None, None, None, [], False
+        got_end = got_begin = False      # 找到了期末 / 期初那一行（数可能是「-」）
         page_unit = unit_near(texts, i) or unit
         for j in (i, i + 1):
             if j >= len(doc) or (j > i and col is None):
@@ -341,13 +342,13 @@ def from_notes(doc, texts, start, unit, year):
                 c = min(cells, key=lambda c: abs((c[0] + c[1]) / 2 - col))
                 if abs((c[0] + c[1]) / 2 - col) > 60:
                     continue
-                if when == "end" and end is None:
-                    end = c[2]
+                if when == "end" and not got_end:
+                    end, got_end = c[2], True
                     raw.append(row_text(r))
-                elif when == "begin" and begin is None:
-                    begin = c[2]
+                elif when == "begin" and not got_begin:
+                    begin, got_begin = c[2], True
                     raw.append(row_text(r))
-            if stop or (end is not None and begin is not None):
+            if stop or (got_end and got_begin):
                 break
         if end is not None or begin is not None:
             return [{"parent": "无形资产", "end": end, "begin": begin, "page": i + 1,
@@ -383,14 +384,12 @@ def from_text(texts, start):
                 unit = m.group(2)
                 if m.group(4) and m.group(4) != unit:   # 上年数单位不同，统一换算到本年数的单位
                     begin = begin * UNITS[m.group(4)] / UNITS[unit]
-            elif not re.search(r"原值|原价|成本", sentence):
+            else:
                 m = PLAIN_TEXT.search(sentence)
-                if not m:
+                if not m or re.search(r"原值|原价|成本", m.group(0)):
                     continue
                 end, begin = float((m.group(1) or m.group(3)).replace(",", "")), None
                 unit = m.group(2) or m.group(4)
-            else:
-                continue
             return [{"parent": parent, "end": end, "begin": begin, "page": i + 1, "raw": sentence[:200],
                      "source": "附注·文字说明", "unit": unit}]
     return []
