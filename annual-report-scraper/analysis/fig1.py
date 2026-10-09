@@ -9,9 +9,9 @@ from matplotlib.patches import FancyBboxPatch
 font_manager.fontManager.addfont("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc")
 plt.rcParams.update({"font.family": "WenQuanYi Zen Hei", "font.size": 8})
 
-fig = plt.figure(figsize=(15.5 / 2.54, 7.2 / 2.54))
+fig = plt.figure(figsize=(15.5 / 2.54, 8.6 / 2.54))
 ax = fig.add_axes([0, 0, 1, 1])          # 坐标单位即毫米
-ax.set_xlim(0, 155); ax.set_ylim(0, 72); ax.axis("off")
+ax.set_xlim(0, 155); ax.set_ylim(-14, 72); ax.axis("off")
 
 
 def box(x, y, w, h, title, lines, fill="white"):
@@ -36,4 +36,8 @@ ax.text(132, 70, "入表改变了什么", ha="center", va="top", fontsize=8.5, w
 box(108, 37, 46, 28, "会计上的利润效应（H1）", ["净利率影响＝相对重要性", "×（总资产÷营业收入）", "→ 集中于中小、亏损企业"])
 box(108, 4, 46, 28, "是否伴随盈余管理（H3）", ["H3a：资本化程度、可操纵应计、", "微利概率上升", "H3b：仅为列报细化，无显著变化"])
 arrow(94, 40, 108, 51); arrow(94, 32, 108, 18)
+# 下：跨期回转与摊销裁量（进一步分析）
+ax.add_patch(FancyBboxPatch((40, -12), 114, 12, boxstyle="round,pad=0,rounding_size=1.5", fc="white", ec="black", lw=0.7, ls="--"))
+ax.text(97, -6, "后续期间：首年的利润改善以摊销形式回转，裁量空间转向摊销年限与方法", ha="center", va="center", fontsize=7.2)
+arrow(75, 22, 75, 0)
 fig.savefig(sys.argv[1], dpi=300)
