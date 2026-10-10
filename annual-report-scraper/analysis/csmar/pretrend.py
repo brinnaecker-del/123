@@ -3,7 +3,9 @@
      报告各期系数与 95% 置信区间，以及入表前系数联合为零的 Wald 检验（按公司聚类）；
   2. Callaway-Sant'Anna 动态效应（双重稳健，从未入表企业为对照，通用基期为入表前一年），供图 3 使用；
   3. 真实盈余管理 2021 年差异的稳健性：逐年缩尾 5%/95%、行业×年度固定效应、去掉 2021 年；
-  4. 控制变量设定：不加控制变量、剔除总资产收益率、控制变量取上一年值。
+  4. 控制变量设定：不加控制变量、剔除总资产收益率、控制变量取上一年值；
+  5. 与截面设计的对比（郑心泓和徐雨，2026）：2024 年截面上应计、真实盈余管理（原值与绝对值）对数据资源占总资产比重回归；
+     同一回归改用 2023 年（入表前）的被解释变量作安慰剂；剔除入表强度最高的一家、改用是否入表的虚拟变量；真实盈余管理绝对值的双重差分。
 用法：python pretrend.py csmar/analysis6.pkl 输出.json"""
 import json, sys, warnings
 import numpy as np, pandas as pd, pyfixest as pf
@@ -80,5 +82,35 @@ for y in ("caprate", "absDA", "small", "REM"):
     xs = XS[y]
     res["controls"][y] = {"base": twfe(d, y, xs), "none": twfe(d, y, []), "no_roa": twfe(d, y, [x for x in xs if x != "roa"]),
                           "lagged": twfe(d, y, [x + "_l" for x in xs])}
+# 5. 与截面设计的对比：2024 年数据资源占总资产比重（Data）对盈余管理的截面回归，及其在入表前一年（2023 年）的安慰剂
+d["absREM"] = d.REM.abs()
+data24 = d[d.year == 2024].set_index("Stkcd").eval("DR.fillna(0) / TA")
+XC = ["size", "roa", "loss", "growth", "lev", "inst"]
+res["cross"] = {"n_data_pos": int((data24 > 0).sum())}
+for y in ("DA", "absDA", "REM", "absREM"):
+    for yr in (2024, 2023):
+        x = d[d.year == yr].copy()
+        x["data"] = x.Stkcd.map(data24)
+        x = x.dropna(subset=[y, "data", "ind"] + XC)
+        m = pf.feols(f"{y} ~ data + {' + '.join(XC)} | ind", x, vcov="hetero")
+        t = m.tidy().loc["data"]
+        res["cross"][f"{y}_{yr}"] = {"b": round(float(t.Estimate), 4), "t": round(float(t["t value"]), 2), "p": round(float(t["Pr(>|t|)"]), 3),
+                                    "N": int(m._N), "cell": cell(float(t.Estimate), float(t["Std. Error"]), float(t["Pr(>|t|)"]))}
+# 截面关联是否来自个别入表强度极高的企业：剔除 Data 最高的一家；改用是否入表的虚拟变量
+x24 = d[d.year == 2024].copy(); x24["data"] = x24.Stkcd.map(data24); x24["adopt"] = (x24.data > 0).astype(int)
+top1 = x24.sort_values("data", ascending=False).iloc[0]
+res["cross"]["top1"] = {"name": top1.ShortName, "data": round(float(top1.data), 4), "REM": round(float(top1.REM), 4)}
+for lab, xx, var in (("excl_top1", x24[x24.Stkcd != top1.Stkcd], "data"), ("adopt_dummy", x24, "adopt")):
+    for y in ("REM", "absREM"):
+        xy = xx.dropna(subset=[y, var, "ind"] + XC)
+        t = pf.feols(f"{y} ~ {var} + {' + '.join(XC)} | ind", xy, vcov="hetero").tidy().loc[var]
+        res["cross"][f"{y}_{lab}"] = {"b": round(float(t.Estimate), 4), "t": round(float(t["t value"]), 2), "p": round(float(t["Pr(>|t|)"]), 3), "N": int(len(xy))}
+res["cross"]["absREM_twfe"] = twfe(d, "absREM", C)
+dd = d.dropna(subset=["absREM"] + C).copy(); dd["gc"] = dd["first"]
+att = ATTgt(data=dd.set_index(["Stkcd", "year"]), cohort_column="gc", base_period="varying")
+att.fit(formula="absREM ~ " + " + ".join(C), est_method="dr", control_group="never_treated", progress_bar=False)
+sm_ = att.aggregate("simple"); bcs, scs = float(sm_.iloc[0, 0]), float(sm_.iloc[0, 1])
+pcs = float(2 * (1 - stats.norm.cdf(abs(bcs / scs))))
+res["cross"]["absREM_cs"] = {"b": round(bcs, 4), "se": round(scs, 4), "p": round(pcs, 3), "cell": cell(bcs, scs, pcs)}
 json.dump(res, open(OUT, "w"), ensure_ascii=False, indent=1)
 print(json.dumps(res, ensure_ascii=False, indent=1))
