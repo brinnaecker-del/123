@@ -3,6 +3,21 @@
   "all": 236,
   "notes_full": 204
  },
+ "coverage": {
+  "bs_int_pos": 214,
+  "matched": 209,
+  "not_disclosed": 5,
+  "balanced": [
+   201,
+   202,
+   208
+  ],
+  "checked": [
+   201,
+   202,
+   208
+  ]
+ },
  "decomp": {
   "nonfin_2024": {
    "firms": 77,
@@ -99,8 +114,14 @@
   "n_E25_neg": 43,
   "n_E25_le_A25": 45,
   "nonfin": {
-   "firms": 81,
-   "A25_over_E24_agg": 0.4162
+   "firms_both": 88,
+   "firms_with_notes": 81,
+   "sum_E24": 16.617,
+   "sum_A25": 6.915,
+   "A25_over_E24_agg": 0.4162,
+   "A25_over_E24_median": 0.2552,
+   "n_E25_neg": 39,
+   "n_E25_le_A25": 40
   }
  },
  "policy": {

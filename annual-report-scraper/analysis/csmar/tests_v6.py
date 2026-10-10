@@ -97,7 +97,7 @@ def fit_sel(a, cols, logit=True):
     fe = "ind + year" if a.year.nunique() > 1 else "ind"
     m1 = pf.feols(f"y ~ {rhs} | {fe}", a, vcov={"CRV1": "Stkcd"})
     t1 = m1.tidy()
-    out = {"N": int(m1._N), "events": int(a.y.sum()), "rate": round(float(a.y.mean()), 4),
+    out = {"N": int(m1._N), "events": int(a.y.sum()), "rate": round(float(a.y.mean()), 4), "r2": round(float(m1._r2), 3),
            "lpm": {v: f"{t1.loc[v, 'Estimate'] * 100:.3f}{star(t1.loc[v, 'Pr(>|t|)'])}\n({t1.loc[v, 't value']:.2f})" for v in cols},
            "lpm_p": {v: round(float(t1.loc[v, "Pr(>|t|)"]), 3) for v in cols}}
     if logit:
@@ -123,6 +123,7 @@ sel["monitor_242526"] = fit_sel(sel_sample((2024, 2025, 2026), X + M), X + M)
 a26 = sel_sample((2026,), X + M)
 sel["only2026"] = fit_sel(a26, ["loss", "decl", "small", "size", "soe", "caprate"], logit=False)
 sel["new26"] = sorted(a26[a26.y == 1].Stkcd)
+sel["half_dr_firms"] = {str(y): int((g.DR_h > 0).sum()) for y, g in half.groupby("year")}   # 半年报列报数据资源的 A 股公司（含金融）
 b23 = p[p.year == 2023]
 sel["desc2023"] = {v: {"treated": round(float(b23[b23.treat == 1][v].mean()), 3), "control": round(float(b23[b23.treat == 0][v].mean()), 3),
                        "t_p": round(float(stats.ttest_ind(b23[b23.treat == 1][v].dropna(), b23[b23.treat == 0][v].dropna(), equal_var=False).pvalue), 3)}
@@ -173,6 +174,8 @@ for y in ("lnfee", "inq", "inq_q"):
         tr = r3[(r3.treat == 1) & r3.year.between(2023, 2025)]
         rob["treated_letters"] = {f"{yy}_post{pp}": [int(g.inq.sum()), int(len(g))] for (yy, pp), g in tr.groupby(["year", "post"])}
         rob["treated_letters_loss_share"] = round(float(tr[tr.inq == 1].loss.mean()), 3)
+        post = tr[(tr.inq == 1) & (tr.post == 1)]
+        rob["post_letters"] = [int(len(post)), int(post.loss.sum())]             # 入表后收到年报问询函的家次、其中亏损的家次
     cons[y]["robust"] = rob
 res["cons"] = cons
 print("3 done", flush=True)

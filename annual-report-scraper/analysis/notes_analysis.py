@@ -34,7 +34,12 @@ d["D"] = f0("原值_减少") - f0("摊销_减少") - f0("减值_减少")
 full = got & d.原值_期末.notna() & d.净值_期末.notna() & d.原值_增加.notna()   # 有完整滚动表的（文字披露只有期末数，不能拆）
 d["G"] = np.where(full, d.E_oth + d.G_int, np.nan)
 d["resid"] = np.where(full, d.E - (d.G - d.A - d.I - d.D), np.nan)
-res = {"n": {"all": int(len(d)), "notes_full": int(full.sum())}}
+res = {"n": {"all": int(len(d)), "notes_full": int(full.sum())},
+       "coverage": {"bs_int_pos": int((n["资产负债表数"].fillna(0) > 0).sum()),
+                    "matched": int(((n["资产负债表数"].fillna(0) > 0) & (n["与资产负债表核对"] == "一致")).sum()),
+                    "not_disclosed": int((n["与资产负债表核对"] == "附注未披露明细").sum()),
+                    "balanced": [int((n[c].dropna().abs() < 1).sum()) for c in ("原值勾稽", "摊销勾稽", "净值勾稽")],
+                    "checked": [int(n[c].notna().sum()) for c in ("原值勾稽", "摊销勾稽", "净值勾稽")]}}
 
 
 def agg(g):
@@ -58,13 +63,18 @@ a = d[d.year == 2024].set_index("code"); b = d[d.year == 2025].set_index("code")
 both = a.index.intersection(b.index)
 r = pd.DataFrame({"E24": a.loc[both, "E"], "A25": b.loc[both, "A"], "E25": b.loc[both, "E"], "G25": b.loc[both, "G"],
                   "full25": b.loc[both, "G"].notna(), "nonfin": a.loc[both, "nonfin"]})
-rr = r[r.full25 & (r.E24 > 0)]
-res["reversal"] = {"firms_both": int(len(r)), "firms_with_notes": int(len(rr)),
-                   "sum_E24": round(rr.E24.sum() / 1e8, 3), "sum_A25": round(rr.A25.sum() / 1e8, 3),
-                   "A25_over_E24_agg": round(rr.A25.sum() / rr.E24.sum(), 4),
-                   "A25_over_E24_median": round(float((rr.A25 / rr.E24).median()), 4),
-                   "n_E25_neg": int((r.E25 < 0).sum()), "n_E25_le_A25": int((rr.E25 < rr.A25).sum()),
-                   "nonfin": {"firms": int(rr.nonfin.sum()), "A25_over_E24_agg": round(rr[rr.nonfin].A25.sum() / rr[rr.nonfin].E24.sum(), 4)}}
+
+
+def rev(r):
+    rr = r[r.full25 & (r.E24 > 0)]
+    return {"firms_both": int(len(r)), "firms_with_notes": int(len(rr)),
+            "sum_E24": round(rr.E24.sum() / 1e8, 3), "sum_A25": round(rr.A25.sum() / 1e8, 3),
+            "A25_over_E24_agg": round(rr.A25.sum() / rr.E24.sum(), 4),
+            "A25_over_E24_median": round(float((rr.A25 / rr.E24).median()), 4),
+            "n_E25_neg": int((r.E25 < 0).sum()), "n_E25_le_A25": int((rr.E25 < rr.A25).sum())}
+
+
+res["reversal"] = {**rev(r), "nonfin": rev(r[r.nonfin])}
 
 # ---------------- 摊销政策
 d["L_lo"], d["L_hi"] = d["使用寿命下限(年)"], d["使用寿命上限(年)"]
