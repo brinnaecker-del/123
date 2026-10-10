@@ -96,6 +96,10 @@ pl = num(pl, ["PledRatio"]).rename(columns={"Symbol": "Stkcd", "PledRatio": "ple
 au = clean(find("FIN_Audit", lambda c: "Tcost" in c), "Stkcd", "Accper", "12-31")
 au["big4"] = au.Dadtunit.fillna("").str.contains("普华永道|德勤|安永|毕马威").astype(int)
 au["lnfee"] = np.log(pd.to_numeric(au.Tcost, errors="coerce").where(lambda x: x > 0))
+au["firm"] = au.Dadtunit.fillna("").str.replace(r"[（(].*?[)）]", "", regex=True).str.replace("会计师事务所", "").str.strip()
+pa = au[["Stkcd", "year", "firm"]].copy(); pa["year"] += 1
+au = au.merge(pa.rename(columns={"firm": "firm_l"}), on=["Stkcd", "year"], how="left")
+au["switch"] = ((au.firm != au.firm_l) & (au.firm != "")).astype(float).where(au.firm_l.notna())   # 更换境内审计事务所
 an = num(clean(find("AF_CFEATUREPROFILE", lambda c: "AnaAttention" in c), "Stkcd", "Accper", "12-31"), ["AnaAttention"])
 ins = num(clean(find("INI_HolderSystematics", lambda c: "InsInvestorProp" in c), "Symbol", "EndDate", "12-31"), ["InsInvestorProp"])
 q = find("CMS_InquiriesSE", lambda c: "InquiryTitle" in c)
@@ -103,7 +107,8 @@ q = q[q.InquiryDate.astype(str).str.match(DATE)].copy()
 t = q.InquiryTitle.fillna("")
 q["ar"] = (q.InquiryType == "1") | (t.str.contains("年报|年度报告") & ~t.str.contains("半年|季"))
 fy = pd.to_numeric(t.str.extract(r"(20\d\d)\s*年(?:年度报告|年报|度报告)")[0], errors="coerce")
-q["year"] = fy.fillna(q.InquiryDate.str[:4].astype(int) - 1).astype(int)       # 年报问询函对应的会计年度
+fy_date = q.InquiryDate.str[:4].astype(int) - 1
+q["year"] = np.where(fy.notna() & (fy <= fy_date), fy, fy_date).astype(int)   # 年报问询函对应的会计年度；标题年份晚于发函上一年的属标题错误
 q["QuestionNum"] = pd.to_numeric(q.QuestionNum, errors="coerce")
 qa = q[q.ar].groupby(["Symbol", "year"]).agg(inq_n=("EventID", "size"), inq_q=("QuestionNum", "sum")).reset_index()
 qa = qa.rename(columns={"Symbol": "Stkcd"})
@@ -113,7 +118,7 @@ p = p.merge(r[["Stkcd", "year", "abCFO", "abPROD", "abDISX", "REM", "etr", "COGS
 p = p.merge(pl, on=["Stkcd", "year"], how="left")
 sh_sz = p.Stkcd.str[:1].isin(["0", "3", "6"])
 p["pled"] = p.pled.where(p.pled.notna() | ~sh_sz | (p.year < 2022) | (p.year > 2025), 0.0)   # 沪深股票不在统计表里即无质押
-p = p.merge(au[["Stkcd", "year", "big4", "lnfee"]], on=["Stkcd", "year"], how="left")
+p = p.merge(au[["Stkcd", "year", "big4", "lnfee", "switch"]], on=["Stkcd", "year"], how="left")
 p = p.merge(an[["Stkcd", "year", "AnaAttention"]], on=["Stkcd", "year"], how="left")
 p["nana"] = p.AnaAttention.where(p.year < 2022, p.AnaAttention.fillna(0))
 p["lnana"] = np.log1p(p.nana)

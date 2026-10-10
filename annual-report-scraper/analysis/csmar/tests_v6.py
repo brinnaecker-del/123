@@ -142,6 +142,38 @@ for y, (a0, a1) in CONS.items():
     if y in ("lnfee", "lnana", "inq"):
         b2, se2, pv2 = cs_att(dd, y, XC)
         cons[y]["cs"] = {"b": round(b2, 4), "p": round(pv2, 3), "cell": cell(b2, se2, pv2)}
+# 稳健性：换用国企×年度、行业×年度、规模五分组×年度、2023 年经营状态×年度固定效应，控制事务所变更，分批次估计
+s23 = p[p.year == 2023][["Stkcd", "soe", "size", "loss", "decl"]].rename(columns={"soe": "soe23", "size": "size23", "loss": "l23", "decl": "d23"})
+r3 = d.merge(s23, on="Stkcd", how="left")
+r3["soe_y"] = r3.soe23.fillna(-1).astype(int).astype(str) + "_" + r3.year.astype(str)
+r3["ind_y"] = r3.ind.astype(str) + "_" + r3.year.astype(str)
+r3["sz_y"] = pd.qcut(r3.size23, 5, labels=False).fillna(-1).astype(int).astype(str) + "_" + r3.year.astype(str)
+r3["st_y"] = r3.l23.fillna(-1).astype(int).astype(str) + r3.d23.fillna(-1).astype(int).astype(str) + "_" + r3.year.astype(str)
+FES = {"soe_year": "Stkcd + soe_y", "ind_year": "Stkcd + ind_y", "size_year": "Stkcd + sz_y", "all": "Stkcd + soe_y + ind_y + sz_y + st_y"}
+for y in ("lnfee", "inq", "inq_q"):
+    a0, a1 = CONS[y]
+    dd = r3[r3.year.between(a0, a1)].dropna(subset=[y] + XC)
+    rob = {}
+    for k, fe in FES.items():
+        m = pf.feols(f"{y} ~ post + {' + '.join(XC)} | {fe}", dd, vcov={"CRV1": "Stkcd"})
+        t = m.tidy().loc["post"]; rob[k] = cell(float(t.Estimate), float(t["Std. Error"]), float(t["Pr(>|t|)"]))
+    for g in (2024, 2025):
+        m = pf.feols(f"{y} ~ post + {' + '.join(XC)} | Stkcd + year", dd[dd["first"].isna() | (dd["first"] == g)], vcov={"CRV1": "Stkcd"})
+        t = m.tidy().loc["post"]; rob[f"cohort{g}"] = cell(float(t.Estimate), float(t["Std. Error"]), float(t["Pr(>|t|)"]))
+    if y == "lnfee":
+        m = pf.feols(f"{y} ~ post + switch + {' + '.join(XC)} | Stkcd + year", dd.dropna(subset=["switch"]), vcov={"CRV1": "Stkcd"})
+        t = m.tidy().loc["post"]; rob["with_switch"] = cell(float(t.Estimate), float(t["Std. Error"]), float(t["Pr(>|t|)"]))
+        e3 = dd[dd["first"].isna() | (dd["first"] == 2024)].copy()
+        for k in (2022, 2024, 2025):
+            e3[f"T{k}"] = ((e3["first"] == 2024) & (e3.year == k)).astype(int)
+        m = pf.feols(f"{y} ~ T2022 + T2024 + T2025 + {' + '.join(XC)} | Stkcd + year", e3, vcov={"CRV1": "Stkcd"})
+        te = m.tidy(); rob["event2024"] = {k: [round(float(te.loc[k, "Estimate"]), 4), round(float(te.loc[k, "Pr(>|t|)"]), 3)] for k in ("T2022", "T2024", "T2025")}
+        rob["switch_rate"] = {f"{yy}_{tt}": round(float(v), 3) for (yy, tt), v in r3[r3.year >= 2023].groupby(["year", "treat"]).switch.mean().items()}
+    if y == "inq":
+        tr = r3[(r3.treat == 1) & r3.year.between(2023, 2025)]
+        rob["treated_letters"] = {f"{yy}_post{pp}": [int(g.inq.sum()), int(len(g))] for (yy, pp), g in tr.groupby(["year", "post"])}
+        rob["treated_letters_loss_share"] = round(float(tr[tr.inq == 1].loss.mean()), 3)
+    cons[y]["robust"] = rob
 res["cons"] = cons
 print("3 done", flush=True)
 
