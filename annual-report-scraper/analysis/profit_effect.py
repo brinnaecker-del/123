@@ -2,7 +2,7 @@
 (1) 入表额对总资产的规模弹性：ln E＝a＋b·ln TA，检验 b＝0（与规模无关）与 b＝1（与规模同比例）；
 (2) ln IMP 方差的 Shapley 分解：ln IMP＝ln E－ln TA＋ln(TA/REV)，三部分各解释多少；
 (3) 亏损的放大效应：ln(TA/REV) 对亏损回归（即 ln IMP－ln REL，系数等于模型(1)中约束 lnREL 系数为 1 时的亏损系数）；
-(4) 重点关注阈值：REL＞1% 或 入表额/|净利润|＞10% 的公司数与金额占比；
+(4) 风险筛查标准：REL＞1% 或 入表额/|净利润|＞10% 的公司数与金额占比，及其覆盖（由盈转亏企业、税前利润率影响≥1 个百分点却未被筛出的企业）；
 (5) 稳健性：规模弹性的中位数回归、剔除总资产两端各 5%；亏损放大效应加入行业门类固定效应（需第三个参数，取 CSMAR 行业代码）。
 主样本为非金融入表企业，全样本（含银行、证券）作对照。用法：python profit_effect.py 入表财务效应分析样本.csv 输出.json [csmar/analysis6.pkl]"""
 import itertools, json, math, sys
@@ -126,6 +126,12 @@ for y, g in s.groupby("年度"):
              "either_pct": round(float(100 * flag.mean()), 1), "either_loss": int((flag & (g.净利润 < 0)).sum()),
              "E_share_of_flagged": round(float(100 * g[flag].测算入表额.clip(lower=0).sum() / g.测算入表额.clip(lower=0).sum()), 1),
              "names": g[flag].简称.tolist()}
+    # 筛查标准的覆盖：是否包含由盈转亏的企业；税前利润率影响≥1 个百分点却未被筛出的企业（多为亏损很深、入表额相对亏损较小者）
+    th[y]["flip_flagged"] = g[flag & (g.净利润 > 0) & (g.净利润 - g.测算入表额 < 0)].简称.tolist()
+    imp1 = (g.行业 == "非金融") & (g.测算入表额 > 0) & (g.净利率影响pp >= 1)
+    th[y]["imp_ge1"] = int(imp1.sum()); th[y]["imp_ge1_flagged"] = int((imp1 & flag).sum())
+    th[y]["imp_ge1_missed"] = [[r.简称, round(float(r.净利率影响pp), 2), round(float(r["相对重要性%"]), 2), round(float(100 * share[i]), 2),
+                                round(float(r["净利率%"]), 2)] for i, r in g[imp1 & ~flag].sort_values("净利率影响pp", ascending=False).iterrows()]
 res["threshold"] = th
 json.dump(res, open(sys.argv[2], "w"), ensure_ascii=False, indent=1)
 print(json.dumps(res, ensure_ascii=False, indent=1)[:6000])

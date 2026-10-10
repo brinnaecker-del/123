@@ -21,7 +21,7 @@
 | 14 | `pretrend.py csmar/analysis6.pkl 输出.json`，`fig3_cs.py pretrend.json 图3.png` | 平行趋势与控制变量设定：2024 年批次事件研究（研发资本化率、|可操纵应计|、微利、真实盈余管理三项及合计）及入表前系数联合 Wald 检验；Callaway-Sant'Anna 动态效应（四个结果变量，图 3）；真实盈余管理 2021 年差异的稳健性（逐年缩尾 5%、行业×年度固定效应、去掉 2021 年）；不加控制变量、剔除总资产收益率、控制变量取上一年值的双重差分；与郑心泓和徐雨（2026）截面设计的对比（2024 年截面回归、2023 年安慰剂、剔除入表强度最高的一家、是否入表虚拟变量、真实盈余管理绝对值的双重差分） | 第 7 版图 3、表 7、附表 3 |
 | — | `did2.py`、`did3.py` | 早期探索性检验；did3 的结论已并入 `paper_facts.py`（`loss2023_sub`） | — |
 
-利润效应部分用的是上一级目录的 `profit_effect.py`（表 3：规模弹性及其中位数回归、剔除两端 5% 的稳健性，Shapley 分解，亏损的放大效应及控制行业门类的版本，重点关注阈值；第三个参数 `csmar/analysis6.pkl` 提供行业代码）与 `table2.py`、`stats.py`、`fig2.py`（第 4 版表 3、图 2），只需要年报手工样本，不需要 CSMAR。图 1（研究框架）由上一级目录的 `fig1.py` 绘制。各程序的输出已存入 `年报存档/实证结果/`。
+利润效应部分用的是上一级目录的 `profit_effect.py`（表 3：规模弹性及其中位数回归、剔除两端 5% 的稳健性，Shapley 分解，亏损的放大效应及控制行业门类的版本，风险筛查标准及其覆盖与盲区；第三个参数 `csmar/analysis6.pkl` 提供行业代码）与 `table2.py`、`stats.py`、`fig2.py`（第 4 版表 3、图 2），只需要年报手工样本，不需要 CSMAR。图 1（研究框架）由上一级目录的 `fig1.py` 绘制。各程序的输出已存入 `年报存档/实证结果/`。
 
 运行环境：`pip install pandas numpy statsmodels scipy pyfixest matplotlib openpyxl differences wildboottest`。第 11 步之后的程序需要先跑完第 0—2 步。`did_modern.py` 的野自助法较慢（约 10 分钟）。
 
