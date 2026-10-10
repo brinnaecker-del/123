@@ -37,6 +37,7 @@ UNIT_RE2 = re.compile(r"人民币(百万元|千元|万元|亿元)")
 NUM_RE = re.compile(r"^\(?-?\d[\d,]*(?:\.\d+)?\)?$")
 DASH_RE = re.compile(r"^[-—–－]+$")
 DATE_RE = re.compile(r"(20\d\d)年(\d{1,2})月(\d{1,2})日")
+ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")   # Excel 单元格不接受的控制字符
 OTHER_HEADERS = ("土地使用权", "软件", "专利", "非专利技术", "商标", "特许经营权", "著作权", "合计", "知识产权", "其他", "域名",
                  "客户关系", "技术", "采矿权", "使用权", "经营权", "版权", "系统", "资质")
 SECTIONS = (("原值", r"(账面原值|账面原价|原值|原价|成本)(合计)?$"), ("摊销", r"累计摊销(合计)?$"),
@@ -440,20 +441,25 @@ FIELDS = ["原值_期初", "原值_增加", "原值_增加_购置", "原值_增�
           "摊销_期初", "摊销_增加", "摊销_减少", "摊销_期末", "减值_期初", "减值_增加", "减值_减少", "减值_期末", "净值_期末", "净值_期初"]
 
 
+def put(ws, row):
+    ws.append([ILLEGAL.sub("", v) if isinstance(v, str) else v for v in row])
+
+
 def main():
     base = Path(REPORT_DIR)
     files = [(f, fd) for fd in FOLDERS for f in sorted((base / fd).glob("*.[pP][dD][fF]"))]
     if not files:
-        print(f"在 {base} 下没有找到 PDF，请检查 REPORT_DIR 与 FOLDERS。")
-        input("按回车键退出…")
-        return
+        sys.exit(f"在 {base} 下没有找到 PDF，请检查 REPORT_DIR 与 FOLDERS 两行。")
+    print(f"共 {len(files)} 份年报，开始处理（大约需要十几到几十分钟，请不要关闭窗口）…")
     wb = openpyxl.Workbook()
     ws = wb.active; ws.title = "无形资产明细"
-    ws.append(["报告年度", "股票代码", "简称", "表格样式", "页码", "单位"] + FIELDS + ["原值勾稽", "摊销勾稽", "文件"])
-    wp = wb.create_sheet("摊销政策"); wp.append(["报告年度", "股票代码", "简称", "使用寿命下限(年)", "使用寿命上限(年)", "摊销方法", "页码", "原文", "其他候选", "会计估计变更线索"])
-    wd = wb.create_sheet("开发支出"); wd.append(["报告年度", "股票代码", "简称", "页码", "原文", "数字（从左到右）"])
-    wl = wb.create_sheet("明细行"); wl.append(["报告年度", "股票代码", "简称", "页码", "部分", "归类", "原文"])
-    wg = wb.create_sheet("诊断"); wg.append(["报告年度", "股票代码", "简称", "页码", "页面原文（词后括号为横向位置）"])
+    put(ws, ["报告年度", "股票代码", "简称", "表格样式", "页码", "单位"] + FIELDS + ["原值勾稽", "摊销勾稽", "文件"])
+    wp = wb.create_sheet("摊销政策")
+    put(wp, ["报告年度", "股票代码", "简称", "使用寿命下限(年)", "使用寿命上限(年)", "摊销方法", "页码", "原文", "其他候选", "会计估计变更线索"])
+    wd = wb.create_sheet("开发支出"); put(wd, ["报告年度", "股票代码", "简称", "页码", "原文", "数字（从左到右）"])
+    wl = wb.create_sheet("明细行"); put(wl, ["报告年度", "股票代码", "简称", "页码", "部分", "归类", "原文"])
+    wg = wb.create_sheet("诊断"); put(wg, ["报告年度", "股票代码", "简称", "页码", "页面原文（词后括号为横向位置）"])
+    ok = 0
     for n, (f, fd) in enumerate(files, 1):
         m = re.match(r"(\d{6})_(.+?)_(20\d\d)", f.stem)
         code, name, year = (m.group(1), m.group(2), int(m.group(3))) if m else ("", f.stem, int(fd[:4]))
@@ -461,32 +467,47 @@ def main():
         try:
             found, lines, style, best, hits, change, dev, diag = process(f, year)
         except Exception as e:                                          # 个别文件损坏时继续
-            print("   出错：", e)
-            wg.append([year, code, name, "", f"出错：{e}"])
+            print("   出错，跳过：", e)
+            put(wg, [year, code, name, "", f"出错：{e}"])
             continue
+        ok += bool(found)
         g = lambda k: found.get(k)
         chk = lambda a, b, c, d: (None if None in (a, d) else round((a or 0) + (b or 0) - (c or 0) - d, 2))
-        ws.append([year, code, name, style[0] if style else "未取到", style[1] if style else None, style[2] if style else None]
-                  + [g(k) for k in FIELDS]
-                  + [chk(g("原值_期初"), g("原值_增加"), g("原值_减少"), g("原值_期末")),
-                     chk(g("摊销_期初"), g("摊销_增加"), g("摊销_减少"), g("摊销_期末")), f.name])
+        put(ws, [year, code, name, style[0] if style else "未取到", style[1] if style else None, style[2] if style else None]
+            + [g(k) for k in FIELDS]
+            + [chk(g("原值_期初"), g("原值_增加"), g("原值_减少"), g("原值_期末")),
+               chk(g("摊销_期初"), g("摊销_增加"), g("摊销_减少"), g("摊销_期末")), f.name])
         others = " | ".join(f"p{h[0]}:{h[1]}" for h in hits[1:4])
-        wp.append([year, code, name, float(best[2]) if best and best[2] else None, float(best[3]) if best and best[3] else None,
-                   best[4] if best else None, best[0] if best else None, best[1] if best else None, others,
-                   " | ".join(f"p{p}:{t}" for p, t in change[:3])])
+        put(wp, [year, code, name, float(best[2]) if best and best[2] else None, float(best[3]) if best and best[3] else None,
+                 best[4] if best else None, best[0] if best else None, best[1] if best else None, others,
+                 " | ".join(f"p{p}:{t}" for p, t in change[:3])])
         for pno, t, nums in dev:
-            wd.append([year, code, name, pno, t, nums])
+            put(wd, [year, code, name, pno, t, nums])
         for pno, sec, kind, t in lines:
-            wl.append([year, code, name, pno, sec, kind, t])
+            put(wl, [year, code, name, pno, sec, kind, t])
         for pno, t in diag:
-            wg.append([year, code, name, pno, t[:30000]])
-    ok = sum(1 for r in ws.iter_rows(min_row=2, values_only=True) if r[3] != "未取到")
-    print(f"\n无形资产明细取到 {ok}/{len(files)} 份；没取到的多为数据资源只在开发支出或存货项下、或附注表格样式特殊，见「诊断」页")
+            put(wg, [year, code, name, pno, t[:30000]])
+    for sh in wb.worksheets:
+        sh.freeze_panes = "A2"
     out = base / "数据资源附注明细.xlsx"
-    wb.save(out)
-    print(f"\n完成，结果在：{out}")
-    input("按回车键退出…")
+    try:
+        wb.save(out)
+    except PermissionError:
+        sys.exit(f"写不进 {out}：请先关掉 Excel 里打开的这个文件，再重新运行")
+    print("\n" + "=" * 50)
+    print(f"处理 {len(files)} 份年报，其中 {ok} 份取到了数据资源无形资产明细")
+    print("没取到的多为数据资源只在开发支出或存货项下，或附注表格样式特殊，见「诊断」页")
+    print(f"结果：{out}")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        if e.code not in (None, 0):
+            print(e)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        print("\n出错了，请把上面的报错信息截图发给我。")
+    input("\n按回车键退出…")
