@@ -3,11 +3,14 @@ import glob
 import numpy as np
 import pandas as pd
 
+NEED = {"FS_Combas": "A002000000", "FS_Comins": "B002000000", "FS_Comscfd": "C001000000"}   # 旧表才有的字段
+
+
 def read(pattern):
     """读旧表（2004–2025、字段较少的那一份）。"""
     for f in glob.glob(f"csmar/*/{pattern}.xlsx"):
         d = pd.read_excel(f, dtype=str)
-        if "A001111000" not in d.columns and "B001216000" not in d.columns:
+        if "A001111000" not in d.columns and "B001216000" not in d.columns and NEED[pattern] in d.columns:
             break
     d = d.iloc[2:]
     d = d[(d.Typrep == "A") & d.Accper.str.endswith("12-31")].copy()
