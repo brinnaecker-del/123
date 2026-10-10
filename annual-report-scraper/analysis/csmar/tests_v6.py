@@ -225,6 +225,10 @@ for lab, g in (("nonfin", s[s.行业 == "非金融"]), ("all", s)):
                               "E_sum_yi": [round(float(pos.测算入表额.sum() / 1e8), 3), round(float(pos.E_at.sum() / 1e8), 3)],
                               "focus": [int(((rel0 > 1) | (e0 > 10)).sum()), int(((rel1 > 1) | (e1 > 10)).sum())],
                               "flip": [int(flip0), int(flip1)], "n_all": int(len(gg))}
+# 案例企业（论文案例表）：税后净利率影响＝入表额×（1－实际税率）÷营业收入；全部费用化后净利率＝（净利润－税后入表额）÷营业收入
+tax["cases"] = {n: {str(r.year): {"tau": round(float(r.tau), 4), "imp_at_pp": round(float(r.E_at / r.营业收入 * 100), 2),
+                                  "nm_expensed_at": round(float((r.净利润 - r.E_at) / r.营业收入 * 100), 2)}
+                    for r in s[s.简称 == n].itertuples()} for n in ("开普云", "拓尔思", "中国移动")}
 res["tax"] = tax
 json.dump(res, open(OUT, "w"), ensure_ascii=False, indent=1)
 print(json.dumps(res, ensure_ascii=False, indent=1))

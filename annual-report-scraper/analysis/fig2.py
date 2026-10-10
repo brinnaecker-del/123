@@ -1,4 +1,4 @@
-"""论文图 2：入表相对重要性与净利率影响（双对数）。用法：python fig2.py 入表财务效应分析样本.csv 输出.png
+"""论文图 2：入表相对重要性与税前利润率影响（双对数）。用法：python fig2.py 入表财务效应分析样本.csv 输出.png
 需要：pip install pandas matplotlib；字体用文泉驿正黑，Windows 上可改成 SimHei"""
 import sys
 import numpy as np
@@ -45,7 +45,7 @@ for ax, (year, title) in zip(axes, [("2024", "(a) 2024年报：入表额＝当�
         axis.set_major_locator(LogLocator(base=10))
         axis.set_major_formatter(fmt)
         axis.set_minor_formatter(NullFormatter())
-axes[0].set_ylabel("净利率影响（百分点，对数刻度）")
+axes[0].set_ylabel("税前利润率影响（百分点，对数刻度）")
 handles = [Line2D([], [], marker="o", ls="", mfc="white", mec="black", ms=4.5, label="盈利且未下滑"),
            Line2D([], [], marker="o", ls="", mfc="0.6", mec="black", ms=4.5, label="盈利但归母净利润下滑"),
            Line2D([], [], marker="o", ls="", mfc="black", mec="black", ms=4.5, label="亏损"),

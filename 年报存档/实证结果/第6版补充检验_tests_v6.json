@@ -976,6 +976,44 @@
     0
    ],
    "n_all": 136
+  },
+  "cases": {
+   "开普云": {
+    "2024": {
+     "tau": 0.0,
+     "imp_at_pp": 3.51,
+     "nm_expensed_at": -1.02
+    },
+    "2025": {
+     "tau": 0.0,
+     "imp_at_pp": 3.3,
+     "nm_expensed_at": -7.31
+    }
+   },
+   "拓尔思": {
+    "2024": {
+     "tau": 0.0,
+     "imp_at_pp": 5.03,
+     "nm_expensed_at": -17.58
+    },
+    "2025": {
+     "tau": 0.0,
+     "imp_at_pp": 5.67,
+     "nm_expensed_at": -63.36
+    }
+   },
+   "中国移动": {
+    "2024": {
+     "tau": 0.2235,
+     "imp_at_pp": 0.05,
+     "nm_expensed_at": 13.26
+    },
+    "2025": {
+     "tau": 0.2183,
+     "imp_at_pp": 0.05,
+     "nm_expensed_at": 13.02
+    }
+   }
   }
  }
 }
