@@ -122,6 +122,10 @@
    "A25_over_E24_median": 0.2552,
    "n_E25_neg": 39,
    "n_E25_le_A25": 40
+  },
+  "nonfin_no_open": {
+   "firms": 79,
+   "A25_over_E24_agg": 0.4162
   }
  },
  "policy": {
@@ -227,6 +231,170 @@
      ]
     }
    }
+  }
+ },
+ "bridge": {
+  "2024": {
+   "firms": 77,
+   "net_open": 0.103079,
+   "G_int": 14.048564,
+   "G_rd": 6.893703,
+   "G_buy": 1.194957,
+   "G_merge": 0.0,
+   "G_other": 5.959904,
+   "E_oth": 3.25202,
+   "dInv": 0.0,
+   "dDev": 3.25202,
+   "A": 1.197026,
+   "I": 0.0,
+   "D": 0.0,
+   "net_close": 12.954618,
+   "E": 16.103558,
+   "resid": -0.0,
+   "rd_firms": 60,
+   "rd_clean": 2.639358,
+   "bound": 4.183607,
+   "bound_firms": 23,
+   "bound_wide": 10.234736,
+   "E_low": 10.724994,
+   "bound_top": [
+    [
+     "中国联通",
+     1.890142
+    ],
+    [
+     "同方股份",
+     1.156707
+    ]
+   ]
+  },
+  "2025": {
+   "firms": 108,
+   "net_open": 12.804774,
+   "G_int": 22.427864,
+   "G_rd": 10.83359,
+   "G_buy": 3.071347,
+   "G_merge": 0.0,
+   "G_other": 8.522927,
+   "E_oth": 0.311225,
+   "dInv": 0.0,
+   "dDev": 0.311225,
+   "A": 7.032159,
+   "I": 0.0,
+   "D": 0.0,
+   "net_close": 28.20048,
+   "E": 15.70693,
+   "resid": -0.0,
+   "rd_firms": 61,
+   "rd_clean": 3.009434,
+   "bound": 7.27743,
+   "bound_firms": 26,
+   "bound_wide": 15.515554,
+   "E_low": 5.358154,
+   "bound_top": [
+    [
+     "中国联通",
+     3.125152
+    ],
+    [
+     "同方股份",
+     1.290376
+    ]
+   ]
+  },
+  "robust": {
+   "2024": {
+    "raw": {
+     "N": 89,
+     "elast": 0.144,
+     "ci": [
+      -0.14,
+      0.428
+     ],
+     "p_eq1": 0.0,
+     "imp_median": 0.0335,
+     "rho_rel_imp": 0.928
+    },
+    "adj": {
+     "N": 75,
+     "elast": 0.111,
+     "ci": [
+      -0.286,
+      0.507
+     ],
+     "p_eq1": 0.0,
+     "imp_median": 0.0318,
+     "rho_rel_imp": 0.923
+    },
+    "dropped": 14
+   },
+   "2025": {
+    "raw": {
+     "N": 81,
+     "elast": 0.245,
+     "ci": [
+      -0.045,
+      0.534
+     ],
+     "p_eq1": 0.0,
+     "imp_median": 0.0196,
+     "rho_rel_imp": 0.937
+    },
+    "adj": {
+     "N": 66,
+     "elast": 0.244,
+     "ci": [
+      -0.103,
+      0.59
+     ],
+     "p_eq1": 0.0,
+     "imp_median": 0.0203,
+     "rho_rel_imp": 0.941
+    },
+    "dropped": 15
+   }
+  }
+ },
+ "sample_flow": {
+  "2024": {
+   "reports": 100,
+   "fin": 9,
+   "nonfin": 91,
+   "not_listed": [
+    "神马股份"
+   ],
+   "nonfin_dr": 90,
+   "first_gaojin": 90,
+   "csmar_only": [
+    "读客文化"
+   ],
+   "first_total": 91,
+   "no_lag": [
+    "世纪恒通",
+    "合合信息"
+   ],
+   "sel_events": 89,
+   "profit_sample": 89,
+   "notes_full": 77
+  },
+  "2025": {
+   "reports": 136,
+   "fin": 15,
+   "nonfin": 121,
+   "not_listed": [
+    "金圆股份"
+   ],
+   "nonfin_dr": 120,
+   "first_gaojin": 32,
+   "csmar_only": [
+    "金隅冀东",
+    "信息发展"
+   ],
+   "first_total": 34,
+   "no_lag": [],
+   "sel_events": 34,
+   "profit_sample": 81,
+   "notes_full": 108
   }
  }
 }

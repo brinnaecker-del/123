@@ -2,8 +2,9 @@
 (1) 入表额对总资产的规模弹性：ln E＝a＋b·ln TA，检验 b＝0（与规模无关）与 b＝1（与规模同比例）；
 (2) ln IMP 方差的 Shapley 分解：ln IMP＝ln E－ln TA＋ln(TA/REV)，三部分各解释多少；
 (3) 亏损的放大效应：ln(TA/REV) 对亏损回归（即 ln IMP－ln REL，系数等于模型(1)中约束 lnREL 系数为 1 时的亏损系数）；
-(4) 重点关注阈值：REL＞1% 或 入表额/|净利润|＞10% 的公司数与金额占比。
-主样本为非金融入表企业，全样本（含银行、证券）作对照。用法：python profit_effect.py 入表财务效应分析样本.csv 输出.json"""
+(4) 重点关注阈值：REL＞1% 或 入表额/|净利润|＞10% 的公司数与金额占比；
+(5) 稳健性：规模弹性的中位数回归、剔除总资产两端各 5%；亏损放大效应加入行业门类固定效应（需第三个参数，取 CSMAR 行业代码）。
+主样本为非金融入表企业，全样本（含银行、证券）作对照。用法：python profit_effect.py 入表财务效应分析样本.csv 输出.json [csmar/analysis6.pkl]"""
 import itertools, json, math, sys
 import numpy as np, pandas as pd
 import statsmodels.formula.api as smf
@@ -13,6 +14,9 @@ s = pd.read_csv(sys.argv[1], dtype={"代码": str, "年度": str})
 s["fin"] = (s.行业 == "金融").astype(int)
 s["loss"] = (s.经营状态 == "亏损").astype(int)
 s["y25"] = (s.年度 == "2025").astype(int)
+if len(sys.argv) > 3:                                                   # 行业门类（证监会行业代码首字母）
+    ind = pd.read_pickle(sys.argv[3]).drop_duplicates("Stkcd").set_index("Stkcd").ind.astype(str).str[0]
+    s["letter"] = s.代码.str.zfill(6).map(ind)
 res = {}
 
 
@@ -67,6 +71,17 @@ for samp, gg in (("nonfin", s[s.fin == 0]), ("all", s)):
         r["elast_b"] = round(float(b), 3); r["elast_ci"] = [round(float(b - 1.96 * se), 3), round(float(b + 1.96 * se), 3)]
         r["elast_p_eq1"] = float(p1); r["elast_r2"] = f"{m.rsquared:.3f}"
         r["r2_lnE"] = round(float(r2(["lnE"], g)), 3); r["r2_lnrel"] = round(float(r2(["lnrel"], g)), 3)
+        # 稳健性：中位数回归；剔除总资产两端各 5%
+        q = smf.quantreg("lnE ~ lnTA" + fe + (" + y25" if pooled else ""), g).fit(q=0.5)
+        bq, sq = float(q.params.lnTA), float(q.bse.lnTA)
+        r["elast_q50"] = {"b": round(bq, 3), "ci": [round(bq - 1.96 * sq, 3), round(bq + 1.96 * sq, 3)],
+                          "p_eq1": float(2 * (1 - stats.norm.cdf(abs((bq - 1) / sq)))), "cell": f"{bq:.3f}{star(float(q.pvalues.lnTA))}\n({bq / sq:.2f})"}
+        lo, hi = g.lnTA.quantile([0.05, 0.95])
+        gt = g[g.lnTA.between(lo, hi)]
+        mt = fit("lnE ~ lnTA" + fe, gt, pooled)
+        bt, st = float(mt.params.lnTA), float(mt.bse.lnTA)
+        r["elast_trim5"] = {"N": int(len(gt)), "b": round(bt, 3), "ci": [round(bt - 1.96 * st, 3), round(bt + 1.96 * st, 3)],
+                            "p_eq1": float(2 * (1 - stats.norm.cdf(abs((bt - 1) / st)))), "cell": f"{bt:.3f}{star(float(mt.pvalues.lnTA))}\n({bt / st:.2f})"}
         sh = shapley(g, ["lnE", "lnTA", "lnAS"])
         r["shapley3"] = {k: round(float(v), 3) for k, v in sh.items()}
         sh2 = shapley(g, ["lnrel", "lnAS"])
@@ -77,6 +92,11 @@ for samp, gg in (("nonfin", s[s.fin == 0]), ("all", s)):
         r["AS_loss_pct"] = round(float((np.exp(m.params.loss) - 1) * 100), 0)
         r["AS_lnTA"] = f"{m.params.lnTA:.3f}{star(m.pvalues.lnTA)}\n({m.params.lnTA / m.bse.lnTA:.2f})"
         r["AS_r2"] = f"{m.rsquared:.3f}"
+        if "letter" in g:                                                # 加入行业门类固定效应
+            gi = g.dropna(subset=["letter"])
+            mi = fit("lnAS ~ loss + lnTA + C(letter)" + fe, gi, pooled)
+            r["AS_loss_ind"] = {"N": int(len(gi)), "b": round(float(mi.params.loss), 3), "p": round(float(mi.pvalues.loss), 3),
+                                "cell": f"{mi.params.loss:.3f}{star(mi.pvalues.loss)}\n({mi.params.loss / mi.bse.loss:.2f})"}
         m = fit("lnrel ~ loss + lnTA" + fe, g, pooled)
         r["REL_loss"] = f"{m.params.loss:.3f}{star(m.pvalues.loss)}\n({m.params.loss / m.bse.loss:.2f})"
         r["REL_loss_p"] = round(float(m.pvalues.loss), 3)
