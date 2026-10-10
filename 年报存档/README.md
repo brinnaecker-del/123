@@ -31,7 +31,7 @@
 | 财务数据提取结果.xlsx | `annual-report-scraper/extract_financials.py` 在作者电脑上的运行结果：236 份年报的总资产、营业收入、净利润、归母净利润、研发费用与研发投入，附「主要会计数据」核对列、明细行和诊断页 |
 | 入表财务效应分析样本.xlsx / .csv | 论文入表利润效应检验（实证修改稿表 2 Panel A、表 3、图 2）用的数据：数据资源余额与财务数据合并，测算相对重要性、净利率影响、经营状态、盈亏反转；含变量说明与「财务数据人工核对」页 |
 | 图1_研究框架.png、图2_全样本相对重要性与净利率影响.png、图3_动态效应.png | 实证修改稿（第 5 版）图 1–图 3；图 3 为 Callaway-Sant'Anna 动态效应 |
-| 实证结果/ | 各分析程序的输出（JSON）：`利润效应_table2.json`（表 3）、`入表选择与双重差分_tables34.json`（表 4、表 5）、`稳健性与异质性_robust.json`、`分层安慰剂_placebo_strat.json`、`正文数字_facts.json`、`利润效应分解_profit_effect.json`、`稳健双重差分_did_modern.json`、`稀有事件与熵平衡_rare_events.json`、`理论异质性_het_theory.json`（与第 5 版表 2—表 10 的对应关系见下面的 README）；程序见 `annual-report-scraper/analysis/csmar/README.md` |
+| 实证结果/ | 各分析程序的输出（JSON）：`利润效应_table2.json`（表 3）、`入表选择与双重差分_tables34.json`（表 4、表 5）、`稳健性与异质性_robust.json`、`分层安慰剂_placebo_strat.json`、`正文数字_facts.json`、`利润效应分解_profit_effect.json`、`稳健双重差分_did_modern.json`、`稀有事件与熵平衡_rare_events.json`、`理论异质性_het_theory.json`（与第 5 版表 2—表 10 的对应关系见下面的 README），以及第 6 版的 `第6版补充检验_tests_v6.json`、`附注明细分解与摊销政策_notes_analysis.json`、`第6.1版分批次检验_cohort_did.json`；程序见 `annual-report-scraper/analysis/csmar/README.md` |
 
 - 核对：程序取到的每个数都位于报表原文对应行的第一、二个金额（逐行复核）；总资产、营业收入与年报「主要会计数据」逐一比对，不一致的均为主要会计数据一侧取到分季度表或截断数字，报表数无误。
 - 人工核对（2026-10-09）：79 个字段按诊断页原文、主要会计数据或下一年报的上期数补录，主要是项目名折行（「归属于母公司股东的净 / 利润」）、金额与项目名上下错位（神马股份、山东玻纤 2024）、报表页无文字层（长江证券 2024、西部证券 2025、中国交建 2025）、程序误取追溯调整表（中国交建 2024）。依据逐条记在分析样本的「财务数据人工核对」页。长江证券 2024 年报的上年归母净利润取 CSMAR。
