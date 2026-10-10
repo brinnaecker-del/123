@@ -16,7 +16,7 @@ s["loss"] = (s.经营状态 == "亏损").astype(int)
 s["y25"] = (s.年度 == "2025").astype(int)
 if len(sys.argv) > 3:                                                   # 行业门类（证监会行业代码首字母）
     ind = pd.read_pickle(sys.argv[3]).drop_duplicates("Stkcd").set_index("Stkcd").ind.astype(str).str[0]
-    s["letter"] = s.代码.str.zfill(6).map(ind)
+    s["letter"] = s.代码.str.zfill(6).replace({"835184": "920184", "836208": "920208"}).map(ind)   # 北交所公司在 CSMAR 中已改用新代码
 res = {}
 
 
@@ -117,7 +117,8 @@ for samp, gg in (("nonfin", s[s.fin == 0]), ("all", s)):
 
 # 重点关注阈值（全部入表企业，含入表额为负者）
 th = {}
-for y, g in s.groupby("年度"):
+# 高金名单中经核对实际未列报数据资源的年报（神马股份 2024、金圆股份 2025、信达证券 2025）期末、期初余额均为 0，不计入入表企业样本
+for y, g in s[(s.入表期末 > 0) | (s.入表期初 > 0)].groupby("年度"):
     g = g.copy()
     share = (g.测算入表额 / g.净利润.abs()).where(g.净利润 != 0)
     a = g["相对重要性%"] > 1; b = share > 0.10

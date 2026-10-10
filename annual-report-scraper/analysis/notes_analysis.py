@@ -84,10 +84,12 @@ res["reversal"] = {**rev(r), "nonfin": rev(r[r.nonfin])}
 # ---------------- 摊销政策
 d["L_lo"], d["L_hi"] = d["使用寿命下限(年)"], d["使用寿命上限(年)"]
 d["L"] = (d.L_lo + d.L_hi) / 2
-firm = d.sort_values("year").groupby("code").agg(L=("L", "first"), L_lo=("L_lo", "first"), meth=("摊销方法", "first"),
+# 高金名单中经核对实际未列报数据资源的年报（神马股份 2024、金圆股份 2025、信达证券 2025）期末、期初余额均为 0，不计入入表企业样本
+act = (d.入表期末 > 0) | (d.入表期初 > 0)
+firm = d[act].sort_values("year").groupby("code").agg(L=("L", "first"), L_lo=("L_lo", "first"), meth=("摊销方法", "first"),
                                                  nonfin=("nonfin", "first"), first=("year", "first"))
 meth = firm.meth.fillna("未披露").str.replace("（无形资产总体政策）", "", regex=False)
-res["policy"] = {"firms": int(len(firm)), "with_life": int(firm.L.notna().sum()),
+res["policy"] = {"firms": int(len(firm)), "with_life": int(firm.L.notna().sum()), "with_life_nonfin": int(firm[firm.nonfin].L.notna().sum()),
                  "life_dist": {str(k): int(v) for k, v in firm.L_lo.value_counts().sort_index().items()},
                  "life_mean": round(float(firm.L.mean()), 2), "life_median": float(firm.L.median()),
                  "range_disclosed": int((d.groupby("code").apply(lambda g: (g.L_hi > g.L_lo).any())).sum()),
@@ -95,14 +97,16 @@ res["policy"] = {"firms": int(len(firm)), "with_life": int(firm.L.notna().sum())
 # 隐含摊销率：2025 年初已有数据资源（原值期初＞0）的企业，本年摊销 ÷ 原值年均余额
 q = d[(d.year == 2025) & full & (d.原值_期初 > 0)].copy()
 q["rate"] = (q.A / ((q.原值_期初 + q.原值_期末) / 2)).clip(0, 1)      # 本年摊销 ÷ 原值年均余额
-res["policy"]["implied_rate_2025"] = {"firms": int(len(q)), "median": round(float(q.rate.median()), 4), "mean": round(float(q.rate.mean()), 4),
+res["policy"]["implied_rate_2025"] = {"firms": int(len(q)), "firms_nonfin": int(q.nonfin.sum()), "median": round(float(q.rate.median()), 4), "mean": round(float(q.rate.mean()), 4),
                                       "implied_life_median": round(float(1 / q.rate[q.rate > 0].median()), 2)}
 
 # 使用寿命、隐含摊销率与入表前一年经营状态
 p = pd.read_pickle(AP)
+BSE = {"920184": "835184", "920208": "836208"}                            # CSMAR 中北交所的新代码 → 年报样本中的原代码
 lag = p[["Stkcd", "year", "loss", "decl", "small", "size", "soe", "lev", "roa"]].copy(); lag["year"] += 1
+lag["Stkcd"] = lag.Stkcd.replace(BSE)
 z = d[d.nonfin].merge(lag.rename(columns={"Stkcd": "code"}), on=["code", "year"], how="left")
-ind = p.drop_duplicates("Stkcd").set_index("Stkcd").ind
+ind = p.drop_duplicates("Stkcd").assign(Stkcd=lambda t: t.Stkcd.replace(BSE)).set_index("Stkcd").ind
 z["it"] = z.code.map(ind).fillna("").str[0].eq("I").astype(int)
 zf = z.sort_values("year").groupby("code").first().reset_index()           # 每家公司取首次入表那年
 zf = zf[zf.L.notna() & zf.loss.notna()].assign(first=lambda t: t.year)
@@ -121,9 +125,9 @@ for y, data in (("L", zf), ("rate", q.merge(lag.rename(columns={"Stkcd": "code"}
 res["policy"]["reg"] = reg
 
 # ---------------- 口径审计：新增额来源与以前年度资本化支出的上界（非金融、附注明细完整）
-lg = p[["Stkcd", "year", "DEV", "DR_dev", "DR_inv"]].copy(); lg["year"] += 1
+lg = p[["Stkcd", "year", "DEV", "DR_dev", "DR_inv"]].copy(); lg["year"] += 1; lg["Stkcd"] = lg.Stkcd.replace(BSE)
 lg = lg.rename(columns={"Stkcd": "code", "DEV": "DEV_l", "DR_dev": "DRdev_l", "DR_inv": "DRinv_l"})
-cur = p[["Stkcd", "year", "DR_dev", "DR_inv"]].rename(columns={"Stkcd": "code"})
+cur = p[["Stkcd", "year", "DR_dev", "DR_inv"]].assign(Stkcd=lambda t: t.Stkcd.replace(BSE)).rename(columns={"Stkcd": "code"})
 b = d[d.nonfin & full].merge(lg, on=["code", "year"], how="left").merge(cur, on=["code", "year"], how="left")
 g0 = lambda c: b[c].fillna(0)                                            # CSMAR 未列示的科目即为 0
 b["G_rd"], b["G_buy"], b["G_merge"] = g0("原值_增加_内部研发"), g0("原值_增加_购置"), g0("原值_增加_企业合并")
@@ -178,10 +182,12 @@ ok_lag = set(map(tuple, lagp.dropna(subset=X + ["ind"])[["Stkcd", "year"]].value
 flow = {}
 for y in (2024, 2025):
     g = s0[s0.年度 == y]; nf = g[g.行业 == "非金融"]; pos = nf[nf.入表期末 > 0]
+    act = (g.入表期末 > 0) | (g.入表期初 > 0)
     prev = set(s0[(s0.年度 < y) & (s0.入表期末 > 0)].Stkcd)
     fy = set(first[first == y].index)
     flow[str(y)] = {"reports": int(len(g)), "fin": int((g.行业 != "非金融").sum()), "nonfin": int(len(nf)),
-                    "not_listed": nf[nf.入表期末 <= 0].简称.tolist(), "nonfin_dr": int(len(pos)),
+                    "not_listed": g[~act & (g.行业 == "非金融")].简称.tolist(), "not_listed_fin": g[~act & (g.行业 != "非金融")].简称.tolist(),
+                    "reports_actual": int(act.sum()), "nonfin_dr": int(len(pos)),
                     "first_gaojin": int((~pos.Stkcd.isin(prev)).sum()),
                     "csmar_only": [names[c] for c in sorted(fy - set(s0[s0.入表期末 > 0].Stkcd))],
                     "first_total": int(len(fy)),
@@ -189,6 +195,15 @@ for y in (2024, 2025):
                     "sel_events": int(sum((c, y) in ok_lag for c in fy)),
                     "profit_sample": int(((d.year == y) & d.nonfin & (d.E > 0)).sum()),
                     "notes_full": int(((d.year == y) & d.nonfin & full).sum())}
+act = (s0.入表期末 > 0) | (s0.入表期初 > 0)
+csmar_only = set(first[first.isin([2024, 2025])].index) - set(s0[act].Stkcd)          # CSMAR 识别、高金名单未列的首次入表企业
+flow["firms"] = {"gaojin": int(s0.code.nunique()), "gaojin_fin": int(s0[s0.行业 != "非金融"].code.nunique()),
+                 "gaojin_nonfin": int(s0[s0.行业 == "非金融"].code.nunique()),
+                 "actual": int(s0[act].code.nunique()), "actual_fin": int(s0[act & (s0.行业 != "非金融")].code.nunique()),
+                 "actual_nonfin": int(s0[act & (s0.行业 == "非金融")].code.nunique()), "csmar_only": len(csmar_only),
+                 "first_nonfin": int(s0[act & (s0.行业 == "非金融")].code.nunique()) + len(csmar_only),
+                 "all_actual": int(s0[act].code.nunique()) + len(csmar_only),
+                 "reports": int(len(s0)), "reports_actual": int(act.sum())}
 res["sample_flow"] = flow
 json.dump(res, open(OUT, "w"), ensure_ascii=False, indent=1)
 print(json.dumps(res, ensure_ascii=False, indent=1))

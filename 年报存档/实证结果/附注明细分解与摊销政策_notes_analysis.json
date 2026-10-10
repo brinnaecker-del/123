@@ -129,8 +129,9 @@
   }
  },
  "policy": {
-  "firms": 140,
+  "firms": 137,
   "with_life": 74,
+  "with_life_nonfin": 65,
   "life_dist": {
    "2.0": 6,
    "3.0": 25,
@@ -142,12 +143,13 @@
   "life_median": 5.0,
   "range_disclosed": 13,
   "methods": {
-   "未披露": 75,
+   "未披露": 72,
    "直线法": 62,
    "年数总和法": 3
   },
   "implied_rate_2025": {
    "firms": 83,
+   "firms_nonfin": 76,
    "median": 0.2,
    "mean": 0.2292,
    "implied_life_median": 5.0
@@ -166,68 +168,68 @@
     "L_mean": 4.83
    },
    "normal_prev": {
-    "n": 35,
+    "n": 36,
     "L_mean": 5.14
    }
   },
   "reg": {
    "L": {
-    "N": 64,
+    "N": 65,
     "r2": 0.021,
     "coef": {
      "loss": [
-      0.192,
-      0.853
+      0.196,
+      0.849
      ],
      "decl": [
-      0.407,
-      0.603
+      0.413,
+      0.593
      ],
      "small": [
-      -0.628,
-      0.696
+      -0.627,
+      0.695
      ],
      "size": [
-      -0.096,
-      0.653
+      -0.092,
+      0.658
      ],
      "soe": [
-      0.286,
-      0.745
+      0.281,
+      0.748
      ],
      "it": [
-      -0.051,
-      0.941
+      -0.063,
+      0.925
      ]
     }
    },
    "rate": {
-    "N": 75,
-    "r2": 0.084,
+    "N": 76,
+    "r2": 0.088,
     "coef": {
      "loss": [
-      0.025,
-      0.593
+      0.029,
+      0.53
      ],
      "decl": [
-      0.024,
-      0.495
+      0.027,
+      0.429
      ],
      "small": [
-      0.095,
-      0.026
+      0.097,
+      0.022
      ],
      "size": [
-      0.008,
-      0.465
+      0.009,
+      0.402
      ],
      "soe": [
       -0.016,
-      0.598
+      0.606
      ],
      "it": [
-      0.022,
-      0.518
+      0.02,
+      0.566
      ]
     }
    }
@@ -363,6 +365,8 @@
    "not_listed": [
     "神马股份"
    ],
+   "not_listed_fin": [],
+   "reports_actual": 99,
    "nonfin_dr": 90,
    "first_gaojin": 90,
    "csmar_only": [
@@ -384,6 +388,10 @@
    "not_listed": [
     "金圆股份"
    ],
+   "not_listed_fin": [
+    "信达证券"
+   ],
+   "reports_actual": 134,
    "nonfin_dr": 120,
    "first_gaojin": 32,
    "csmar_only": [
@@ -395,6 +403,19 @@
    "sel_events": 34,
    "profit_sample": 81,
    "notes_full": 108
+  },
+  "firms": {
+   "gaojin": 140,
+   "gaojin_fin": 16,
+   "gaojin_nonfin": 124,
+   "actual": 137,
+   "actual_fin": 15,
+   "actual_nonfin": 122,
+   "csmar_only": 3,
+   "first_nonfin": 125,
+   "all_actual": 140,
+   "reports": 236,
+   "reports_actual": 233
   }
  }
 }

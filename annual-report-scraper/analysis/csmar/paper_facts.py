@@ -7,6 +7,9 @@ from scipy import stats
 AP, SAMPLE, OUT = sys.argv[1:4]
 p = pd.read_pickle(AP)
 s = pd.read_csv(SAMPLE, dtype={"代码": str, "年度": str})
+s_all = s.copy()
+# 高金名单中经核对实际未列报数据资源的年报（神马股份 2024、金圆股份 2025、信达证券 2025）期末、期初余额均为 0，不计入入表企业样本
+s = s[(s.入表期末 > 0) | (s.入表期初 > 0)]
 F = {}
 
 # ---------------- 入表企业样本：总量与口径 ----------------
@@ -69,7 +72,7 @@ for name in ("开普云", "拓尔思", "中国移动"):
 F["cases"] = cases
 
 # ---------------- 新增数据资源相对于研发投入的规模 ----------------
-mine = s.copy()
+mine = s_all.copy()                                                     # 与 CSMAR 的核对覆盖全部 236 份年报
 mine["Stkcd"] = mine.代码.replace({"835184": "920184", "836208": "920208"})
 mine["year"] = mine.年度.astype(int)
 x = mine[(mine.测算入表额 > 0) & (mine.行业 == "非金融")].merge(p[["Stkcd", "year", "RDSpendSum"]], on=["Stkcd", "year"], how="left")
