@@ -258,7 +258,7 @@ This paper has documented three asymmetries in the public finances of Tibet's co
 
 # Declaration of generative AI and AI-assisted technologies in the manuscript preparation process {.unnumbered}
 
-During the preparation of this work the author(s) used Claude (Anthropic) in order to assist with data cleaning scripts, statistical computation, drafting and language editing. After using this tool, the author(s) reviewed and edited the content as needed and take(s) full responsibility for the content of the published article.
+During the preparation of this work the author used Claude (Anthropic) in order to assist with data cleaning scripts, statistical computation, drafting and language editing. After using this tool, the author reviewed and edited the content as needed and takes full responsibility for the content of the published article.
 
 # References {.unnumbered}
 

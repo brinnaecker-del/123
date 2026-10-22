@@ -2,11 +2,11 @@
 title: "Asymmetric fiscal capacity and insulated spending in a transfer-dependent periphery: County-level evidence from Tibet, 2016–2024"
 ---
 
-**Author(s):** [First name] [Family name]^a,\*^ (please complete; the author order must match the submission system)
+**Author:** Zhanpeng Wang (王展鹏)^a,\*^
 
-^a^ [Full name of institution, department, postal address, city, postcode, China]
+^a^ School of Finance and Economics, Tibet University, [postal address], Lhasa, [postcode], China [please verify the official English name and address]
 
-^\*^ **Corresponding author:** [Name], [full postal address]. E-mail: [e-mail address]
+^\*^ **Corresponding author:** Zhanpeng Wang, [full postal address]. E-mail: [e-mail address]
 
 # Acknowledgements {.unnumbered}
 
@@ -20,11 +20,11 @@ This research did not receive any specific grant from funding agencies in the pu
 
 # Declaration of competing interest {.unnumbered}
 
-The author(s) declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+The author declares no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
 
 # CRediT authorship contribution statement {.unnumbered}
 
-**[Author 1]:** Conceptualization, Data curation, Formal analysis, Methodology, Writing – original draft, Writing – review & editing. [Add co-authors and roles as appropriate.]
+**Zhanpeng Wang:** Conceptualization, Data curation, Formal analysis, Methodology, Writing – original draft, Writing – review & editing.
 
 # Data availability {.unnumbered}
 
@@ -32,4 +32,4 @@ The county panel was compiled from publicly released county and prefecture stati
 
 # Declaration of generative AI and AI-assisted technologies in the manuscript preparation process {.unnumbered}
 
-During the preparation of this work the author(s) used Claude (Anthropic) in order to assist with data cleaning scripts, statistical computation, drafting and language editing. After using this tool, the author(s) reviewed and edited the content as needed and take(s) full responsibility for the content of the published article.
+During the preparation of this work the author used Claude (Anthropic) in order to assist with data cleaning scripts, statistical computation, drafting and language editing. After using this tool, the author reviewed and edited the content as needed and takes full responsibility for the content of the published article.
