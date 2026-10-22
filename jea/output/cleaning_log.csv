@@ -1,0 +1,12 @@
+﻿county,year,variable,value,rule
+当雄县,2022,rev,1429.0,R2 spike
+仁布县,2018,rev,86280.0,R2 spike
+定结县,2018,rev,87763.0,R2 spike
+扎囊县,2018,rev,88002.0,R2 spike
+贡嘎县,2022,rev,665.0,R2 spike
+洛扎县,2018,rev,78431.0,R2 spike
+札达县,2018,rev,85418.0,R2 spike
+改则县,2024,rev,34497.0,R2 spike
+噶尔县,2016,exp,466076.0,R2 spike
+扎囊县,2016,rev,76777.0,R3 mirror
+巴宜区,2018,exp,24179.0,R4 exp<rev
